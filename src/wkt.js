@@ -11,7 +11,6 @@ import { geojsonToWKT } from "@terraformer/wkt";
 import proj4 from "proj4";
 import { register } from "ol/proj/proj4";
 import toast from "react-hot-toast";
-import rewind from "@mapbox/geojson-rewind";
 import L from "leaflet";
 
 const USE_WKT = false;

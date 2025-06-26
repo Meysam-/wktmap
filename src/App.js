@@ -473,15 +473,6 @@ function App() {
           ring.forEach((coord, coordIndex) => {
             // Skip the last coordinate as it's the same as the first (closing coordinate)
             if (coordIndex < ring.length - 1) {
-              const vertexMarker = L.circleMarker([coord[1], coord[0]], {
-                radius: 6,
-                fillColor: ringIndex === 0 ? '#ff0000' : '#ff8800', // Red for exterior, orange for holes
-                color: '#ffffff',
-                weight: 1,
-                opacity: 1,
-                fillOpacity: 0.8
-              });
-
               // Add vertex index as a DivIcon with number
               const indexLabel = L.divIcon({
                 className: 'vertex-index-label',
@@ -514,15 +505,6 @@ function App() {
         });
       } else if (geometry.type === 'LineString') {
         geometry.coordinates.forEach((coord, coordIndex) => {
-          const vertexMarker = L.circleMarker([coord[1], coord[0]], {
-            radius: 6,
-            fillColor: '#0000ff',
-            color: '#ffffff',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-          });
-
           // Add vertex index as a DivIcon with number
           const indexLabel = L.divIcon({
             className: 'vertex-index-label',
