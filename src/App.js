@@ -171,10 +171,11 @@ function App() {
     clearHash();
     if (wktDraw) {
       setWkt(wktDraw);
+      // Process input and visualize to show vertices for drawn polygons
       processInput({
         epsg: 4326,
         wkt: wktDraw
-      }, false);
+      }, true); // Changed from false to true to enable visualization
     }
   }
 
@@ -298,7 +299,71 @@ function App() {
         pointToLayer: createCircleMarker,
       };
       let newLayer = L.geoJSON(spatial.json, conf).addTo(groupRef.current);
+      
+      // Add vertex markers for polygons
+      addVertexMarkers(spatial.json, groupRef.current);
+      
       if (map) map.flyToBounds(newLayer.getBounds(), { duration: 0.5, maxZoom: 14 });
+    }
+  }
+
+  // Function to add vertex markers for polygon geometries
+  function addVertexMarkers(geojson, layerGroup) {
+    function processGeometry(geometry) {
+      if (geometry.type === 'Polygon') {
+        // Process exterior ring and holes
+        geometry.coordinates.forEach((ring, ringIndex) => {
+          ring.forEach((coord, coordIndex) => {
+            // Skip the last coordinate as it's the same as the first (closing coordinate)
+            if (coordIndex < ring.length - 1) {
+              const vertexMarker = L.circleMarker([coord[1], coord[0]], {
+                radius: 3,
+                fillColor: ringIndex === 0 ? '#ff0000' : '#ff8800', // Red for exterior, orange for holes
+                color: '#ffffff',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+              });
+              layerGroup.addLayer(vertexMarker);
+            }
+          });
+        });
+      } else if (geometry.type === 'MultiPolygon') {
+        geometry.coordinates.forEach(polygon => {
+          processGeometry({ type: 'Polygon', coordinates: polygon });
+        });
+      } else if (geometry.type === 'LineString') {
+        geometry.coordinates.forEach((coord, coordIndex) => {
+          const vertexMarker = L.circleMarker([coord[1], coord[0]], {
+            radius: 3,
+            fillColor: '#0000ff',
+            color: '#ffffff',
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+          });
+          layerGroup.addLayer(vertexMarker);
+        });
+      } else if (geometry.type === 'MultiLineString') {
+        geometry.coordinates.forEach(line => {
+          processGeometry({ type: 'LineString', coordinates: line });
+        });
+      } else if (geometry.type === 'GeometryCollection') {
+        geometry.geometries.forEach(geom => {
+          processGeometry(geom);
+        });
+      }
+    }
+
+    if (geojson.type === 'Feature') {
+      processGeometry(geojson.geometry);
+    } else if (geojson.type === 'FeatureCollection') {
+      geojson.features.forEach(feature => {
+        processGeometry(feature.geometry);
+      });
+    } else if (geojson.type && geojson.coordinates) {
+      // Direct geometry object
+      processGeometry(geojson);
     }
   }
 
