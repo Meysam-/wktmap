@@ -44,7 +44,7 @@ function App() {
 
   const groupRef = useRef();
 
-  const ensureResize = function(mapRef) {
+  const ensureResize = function (mapRef) {
     const resizeObserver = new ResizeObserver(() => {
       mapRef.invalidateSize();
     });
@@ -63,7 +63,7 @@ function App() {
         zoom={1}
         scrollWheelZoom={true}
         ref={setMap}
-        >
+      >
         <LayersControl>
           <LayersControl.BaseLayer checked name="OpenStreetMap">
             <TileLayer
@@ -95,42 +95,42 @@ function App() {
           <EditControl
             position="topright"
             onDrawStop={handleDrawStop}
-            edit={{edit: false, remove: false}}
+            edit={{ edit: false, remove: false }}
             draw={{
               rectangle: {
                 shapeOptions: {
-                    opacity: 1,
-                    fillOpacity: 0.2,
-                    weight: 3,
-                    color: "#3388ff",
-                    fill: "#3388ff"
+                  opacity: 1,
+                  fillOpacity: 0.2,
+                  weight: 3,
+                  color: "#3388ff",
+                  fill: "#3388ff"
                 }
               },
               marker: false,
               circle: false,
               polygon: {
                 shapeOptions: {
-                    opacity: 1,
-                    fillOpacity: 0.2,
-                    weight: 3,
-                    color: "#3388ff",
-                    fill: "#3388ff"
-                }
-              },
-              circlemarker: {
                   opacity: 1,
                   fillOpacity: 0.2,
                   weight: 3,
-                  radius: 4,
                   color: "#3388ff",
                   fill: "#3388ff"
+                }
+              },
+              circlemarker: {
+                opacity: 1,
+                fillOpacity: 0.2,
+                weight: 3,
+                radius: 4,
+                color: "#3388ff",
+                fill: "#3388ff"
               },
               polyline: {
                 shapeOptions: {
-                    opacity: 1,
-                    weight: 3,
-                    color: "#3388ff",
-                    fill: false
+                  opacity: 1,
+                  weight: 3,
+                  color: "#3388ff",
+                  fill: false
                 }
               }
             }}
@@ -164,7 +164,7 @@ function App() {
       fetchWkt(hash);
     }
   }, [map]); // eslint-disable-line react-hooks/exhaustive-deps
-  
+
   function handleDrawStop() {
     const wktDraw = layerGroupToWkt(groupRef.current);
     setEpsg(4326);
@@ -243,7 +243,7 @@ function App() {
       headers: {
         "Content-Type": "application/json"
       }
-    }).catch(error => console.error(error)); 
+    }).catch(error => console.error(error));
     window.history.replaceState(null, null, "?" + hash);
     navigator.clipboard.writeText(window.location.href);
     toast("Generated URL for sharing and copied to clipboard")
@@ -306,18 +306,18 @@ function App() {
           fillColor: "#3388ff"
         }
       };
-      
+
       let newLayer = L.geoJSON(spatial.json, conf).addTo(groupRef.current);
-      
+
       // Then, add yellow overlays for rings with incorrect winding order
       addIncorrectWindingOverlays(spatial.json, groupRef.current);
-      
+
       // Add vertex markers for polygons
       addVertexMarkers(spatial.json, groupRef.current);
-      
+
       // Check winding order and show warnings
       checkAndWarnWindingOrder(spatial.json);
-      
+
       if (map) map.flyToBounds(newLayer.getBounds(), { duration: 0.5, maxZoom: 14 });
     }
   }
@@ -338,7 +338,7 @@ function App() {
         geometry.coordinates.forEach((ring, ringIndex) => {
           const signedArea = calculateSignedArea(ring);
           const isClockwise = signedArea > 0;
-          
+
           let hasIncorrectWinding = false;
           if (ringIndex === 0) {
             // Exterior ring should be counter-clockwise
@@ -347,14 +347,14 @@ function App() {
             // Interior rings (holes) should be clockwise
             hasIncorrectWinding = !isClockwise;
           }
-          
+
           if (hasIncorrectWinding) {
             // Create a separate polygon for this specific ring with yellow styling
             const ringGeometry = {
               type: 'Polygon',
               coordinates: [ring]
             };
-            
+
             const yellowOverlay = L.geoJSON(ringGeometry, {
               style: {
                 opacity: 1,
@@ -364,7 +364,7 @@ function App() {
                 fill: false
               }
             });
-            
+
             layerGroup.addLayer(yellowOverlay);
           }
         });
@@ -404,12 +404,12 @@ function App() {
     // Function to check winding order of a geometry
     function checkWindingOrder(geometry) {
       const warnings = [];
-      
+
       function checkPolygon(coordinates, polygonIndex = 0) {
         coordinates.forEach((ring, ringIndex) => {
           const signedArea = calculateSignedArea(ring);
           const isClockwise = signedArea > 0;
-          
+
           if (ringIndex === 0) {
             // Exterior ring should be counter-clockwise (negative signed area)
             if (isClockwise) {
@@ -423,7 +423,7 @@ function App() {
           }
         });
       }
-      
+
       if (geometry.type === 'Polygon') {
         checkPolygon(geometry.coordinates);
       } else if (geometry.type === 'MultiPolygon') {
@@ -435,12 +435,12 @@ function App() {
           warnings.push(...checkWindingOrder(geom));
         });
       }
-      
+
       return warnings;
     }
 
     let allWarnings = [];
-    
+
     if (geojson.type === 'Feature') {
       allWarnings = checkWindingOrder(geojson.geometry);
     } else if (geojson.type === 'FeatureCollection') {
@@ -451,17 +451,15 @@ function App() {
       // Direct geometry object
       allWarnings = checkWindingOrder(geojson);
     }
-    
+
     // Show warnings for incorrect winding order
     if (allWarnings.length > 0) {
-      allWarnings.forEach(warning => {
-        toast.error(warning, { 
-          icon: "⚠️",
-          duration: 8000,
-          style: {
-            maxWidth: '500px'
-          }
-        });
+      toast.error("The rings that are drawn on yellow have wrong winding order.", {
+        icon: "⚠️",
+        duration: 8000,
+        style: {
+          maxWidth: '500px'
+        }
       });
     }
   }
@@ -483,7 +481,7 @@ function App() {
                 opacity: 1,
                 fillOpacity: 0.8
               });
-              
+
               // Add vertex index as a DivIcon with number
               const indexLabel = L.divIcon({
                 className: 'vertex-index-label',
@@ -504,7 +502,7 @@ function App() {
                 iconSize: [16, 16],
                 iconAnchor: [8, 8]
               });
-              
+
               const indexMarker = L.marker([coord[1], coord[0]], { icon: indexLabel });
               layerGroup.addLayer(indexMarker);
             }
@@ -524,7 +522,7 @@ function App() {
             opacity: 1,
             fillOpacity: 0.8
           });
-          
+
           // Add vertex index as a DivIcon with number
           const indexLabel = L.divIcon({
             className: 'vertex-index-label',
@@ -545,7 +543,7 @@ function App() {
             iconSize: [16, 16],
             iconAnchor: [8, 8]
           });
-          
+
           const indexMarker = L.marker([coord[1], coord[0]], { icon: indexLabel });
           layerGroup.addLayer(indexMarker);
         });
@@ -585,7 +583,7 @@ function App() {
         </Container>
       </Navbar>
 
-      { displayMap }
+      {displayMap}
 
       <Container className="mt-3 mb-3">
 
@@ -627,7 +625,7 @@ function App() {
       <footer className="footer mt-auto pt-5 pb-4 bg-light">
         <Container>
           <p className="text-muted">This page parses, visualizes, and shares <a href="https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry" rel="noreferrer" className="text-muted" target="_blank">WKT</a> (ISO 13249) as well as <a href="https://opengeospatial.github.io/ogc-geosparql/geosparql11/spec.html#_rdfs_datatype_geowktliteral" target="blank" rel="noreferrer" className="text-muted">geo:wktLiteral</a> strings in a variety of coordinate reference systems. Built with <a href="https://openlayers.org/" target="blank" rel="noreferrer" className="text-muted">OpenLayers</a>, <a href="https://leafletjs.com/" target="blank" rel="noreferrer" className="text-muted">Leaflet</a>, <a href="https://trac.osgeo.org/proj4js" target="blank" rel="noreferrer" className="text-muted">Proj4js</a>, <a href="https://github.com/terraformer-js/terraformer" target="blank" rel="noreferrer" className="text-muted">terraformer</a>, and <a href="https://epsg.io/" target="blank" rel="noreferrer" className="text-muted">epsg.io</a>. Use the drawing tools to create your own geometries. Copy as Well-known Binary (WKB) or Extended Well-known Binary (EWKB). Also supports <a href="https://h3geo.org/" rel="noreferrer" className="text-muted" target="_blank">Uber H3</a>, <a href="https://en.wikipedia.org/wiki/Geohash" rel="noreferrer" className="text-muted" target="_blank">Geohash</a>, <a href="https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system" rel="noreferrer" className="text-muted" target="_blank">Quadkey</a>, WKB, and WFS BBOX conversion to WKT.</p>
-          <p className="text-muted">Created by <Twitter className="mb-1"/> <a rel="noreferrer" className="text-muted" href="https://twitter.com/PieterPrvst" target="_blank">PieterPrvst</a></p>
+          <p className="text-muted">Created by <Twitter className="mb-1" /> <a rel="noreferrer" className="text-muted" href="https://twitter.com/PieterPrvst" target="_blank">PieterPrvst</a></p>
         </Container>
       </footer>
 

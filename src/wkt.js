@@ -9,7 +9,7 @@ import geohash from "ngeohash";
 import quadkeytools from "quadkeytools";
 import { geojsonToWKT } from "@terraformer/wkt";
 import proj4 from "proj4";
-import {register} from "ol/proj/proj4";
+import { register } from "ol/proj/proj4";
 import toast from "react-hot-toast";
 import rewind from "@mapbox/geojson-rewind";
 import L from "leaflet";
@@ -18,15 +18,15 @@ const USE_WKT = false;
 
 class ValueError extends Error {
   constructor(message) {
-      super(message);
-      this.name = "ValueError";
+    super(message);
+    this.name = "ValueError";
   }
 }
 
 function parseWkt(wkt, input) {
   proj4.defs("EPSG:" + input.epsg, input.proj);
   register(proj4);
-  const options = {"dataProjection": "EPSG:" + input.epsg, "featureProjection": "EPSG:" + input.epsg};
+  const options = { "dataProjection": "EPSG:" + input.epsg, "featureProjection": "EPSG:" + input.epsg };
   const wktFormat = new WKT();
   const feature = wktFormat.readFeature(wkt, options);
   feature.getGeometry().transform("EPSG:" + input.epsg, "EPSG:4326");
@@ -90,8 +90,8 @@ function extractCoordinates(wkt) {
   const regex = /(-?\d+(\.\d+)?\s+-?\d+(\.\d+)?)/g;
   const matches = wkt.match(regex);
   const coordinates = matches.map(match => {
-      const [x, y] = match.split(/\s+/).map(Number);
-      return [x, y];
+    const [x, y] = match.split(/\s+/).map(Number);
+    return [x, y];
   });
   return coordinates;
 }
@@ -152,8 +152,8 @@ function quadkeyToWkt(quadkey) {
 }
 
 function geohashToWkt(hash) {
-    const [bottom, left, top, right] = geohash.decode_bbox(hash);
-    return limitsToPolygon(left, right, bottom, top);
+  const [bottom, left, top, right] = geohash.decode_bbox(hash);
+  return limitsToPolygon(left, right, bottom, top);
 }
 
 function bboxToWkt(bbox) {
@@ -177,23 +177,23 @@ function handleOtherFormats(input) {
   if (isH3(input)) {
     input.wkt = h3ToWkt(input.wkt);
     input.epsg = 4326;
-    return("Converted H3 to WKT");
+    return ("Converted H3 to WKT");
   } else if (isQuadkey(input)) {
     input.wkt = quadkeyToWkt(input.wkt);
     input.epsg = 4326;
-    return("Converted Quadkey to WKT");
+    return ("Converted Quadkey to WKT");
   } else if (isBbox(input)) {
     input.wkt = bboxToWkt(input.wkt);
     input.epsg = 4326;
-    return("Converted BBOX to WKT");
+    return ("Converted BBOX to WKT");
   } else if (isGeohash(input)) {
     input.wkt = geohashToWkt(input.wkt);
     input.epsg = 4326;
-    return("Converted Geohash to WKT");
+    return ("Converted Geohash to WKT");
   } else if (isWkb(input)) {
     input.wkt = wkbToWkt(input.wkt);
     input.epsg = 4326;
-    return("Converted WKB to WKT");
+    return ("Converted WKB to WKT");
   } else {
     return null;
   }
@@ -238,11 +238,11 @@ async function transformInput(input) {
   }
 
   // parse WKT
-  
+
   if (input.proj && wktPart !== "") {
     try {
       input.json = parseWkt(wktPart, input);
-      
+
       // TODO: move
       const uint8 = Geometry.parse(wktPart).toWkb();
       const hex = Buffer.from(uint8).toString("hex").toUpperCase();
@@ -273,7 +273,7 @@ async function transformInput(input) {
 }
 
 function splitGeometry(geometry) {
-  if (geometry.type === "GeometryCollection") { 
+  if (geometry.type === "GeometryCollection") {
     return geometry.geometries;
   } else {
     return [geometry];
@@ -292,12 +292,12 @@ function calculateSignedArea(ring) {
 // Function to check winding order of a geometry
 function checkWindingOrder(geometry) {
   const warnings = [];
-  
+
   function checkPolygon(coordinates, polygonIndex = 0) {
     coordinates.forEach((ring, ringIndex) => {
       const signedArea = calculateSignedArea(ring);
       const isClockwise = signedArea > 0;
-      
+
       if (ringIndex === 0) {
         // Exterior ring should be counter-clockwise (negative signed area)
         if (isClockwise) {
@@ -311,7 +311,7 @@ function checkWindingOrder(geometry) {
       }
     });
   }
-  
+
   if (geometry.type === 'Polygon') {
     checkPolygon(geometry.coordinates);
   } else if (geometry.type === 'MultiPolygon') {
@@ -323,47 +323,47 @@ function checkWindingOrder(geometry) {
       warnings.push(...checkWindingOrder(geom));
     });
   }
-  
+
   return warnings;
 }
 
 function layerGroupToWkt(layerGroup) {
   let geometries = [];
   let windingWarnings = [];
-  
-  layerGroup.eachLayer(function(layer) {
+
+  layerGroup.eachLayer(function (layer) {
     console.log(layer)
-    
+
     // Skip visualization layers by checking for specific properties
     // Vertex markers have a divIcon, yellow overlays don't have feature properties from drawing
     // Only process layers that were actually drawn by the user
-    
+
     // Skip if this is a marker (vertex visualization)
     if (layer instanceof L.Marker) {
       return;
     }
-    
+
     // Skip if this is a visualization overlay (no feature properties or specific styling)
-    if (layer instanceof L.GeoJSON && layer.options && 
-        (layer.options.color === "#ffaa00" || // Yellow overlay color
-         layer.options.fillColor === '#ff0000' || // Red vertex markers
-         layer.options.fillColor === '#ff8800' || // Orange vertex markers  
-         layer.options.fillColor === '#0000ff')) { // Blue vertex markers
+    if (layer instanceof L.GeoJSON && layer.options &&
+      (layer.options.color === "#ffaa00" || // Yellow overlay color
+        layer.options.fillColor === '#ff0000' || // Red vertex markers
+        layer.options.fillColor === '#ff8800' || // Orange vertex markers  
+        layer.options.fillColor === '#0000ff')) { // Blue vertex markers
       return;
     }
-    
+
     // Only process layers that appear to be actual drawn geometries
     // These typically come from the EditControl and have proper feature properties
     try {
       const geo = layer.toGeoJSON();
-      
+
       // Additional check: skip if this looks like a visualization layer
-      if (geo && geo.type === "Feature" && geo.geometry.type === "Point" && 
-          layer.options && (layer.options.radius === 6 || layer.options.radius === 4)) {
+      if (geo && geo.type === "Feature" && geo.geometry.type === "Point" &&
+        layer.options && (layer.options.radius === 6 || layer.options.radius === 4)) {
         // This is likely a vertex marker, skip it
         return;
       }
-      
+
       // Check winding order without fixing it
       if (geo.type === "Feature") {
         const warnings = checkWindingOrder(geo.geometry);
@@ -382,20 +382,18 @@ function layerGroupToWkt(layerGroup) {
       return;
     }
   });
-  
+
   // Show warnings for incorrect winding order
-  if (windingWarnings.length > 0) {
-    windingWarnings.forEach(warning => {
-      toast.error(warning, { 
-        icon: "⚠️",
-        duration: 8000,
-        style: {
-          maxWidth: '500px'
-        }
-      });
-    });
-  }
-  
+  // if (windingWarnings.length > 0) {
+  //   toast.error("The rings that are drawn on yellow have wrong winding order.", {
+  //     icon: "⚠️",
+  //     duration: 8000,
+  //     style: {
+  //       maxWidth: '500px'
+  //     }
+  //   });    
+  // }
+
   const wktGeometries = geometries.map(geojsonToWKT);
   let wkt;
   if (wktGeometries.length === 1) {
