@@ -280,32 +280,88 @@ function splitGeometry(geometry) {
   }
 }
 
+// Function to calculate the signed area of a ring (for winding order detection)
+function calculateSignedArea(ring) {
+  let area = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    area += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+  }
+  return area / 2;
+}
+
+// Function to check winding order of a geometry
+function checkWindingOrder(geometry) {
+  const warnings = [];
+  
+  function checkPolygon(coordinates, polygonIndex = 0) {
+    coordinates.forEach((ring, ringIndex) => {
+      const signedArea = calculateSignedArea(ring);
+      const isClockwise = signedArea > 0;
+      
+      if (ringIndex === 0) {
+        // Exterior ring should be counter-clockwise (negative signed area)
+        if (isClockwise) {
+          warnings.push(`Polygon ${polygonIndex + 1} exterior ring has incorrect winding order (clockwise instead of counter-clockwise)`);
+        }
+      } else {
+        // Interior rings (holes) should be clockwise (positive signed area)
+        if (!isClockwise) {
+          warnings.push(`Polygon ${polygonIndex + 1} hole ${ringIndex} has incorrect winding order (counter-clockwise instead of clockwise)`);
+        }
+      }
+    });
+  }
+  
+  if (geometry.type === 'Polygon') {
+    checkPolygon(geometry.coordinates);
+  } else if (geometry.type === 'MultiPolygon') {
+    geometry.coordinates.forEach((polygon, index) => {
+      checkPolygon(polygon, index);
+    });
+  } else if (geometry.type === 'GeometryCollection') {
+    geometry.geometries.forEach(geom => {
+      warnings.push(...checkWindingOrder(geom));
+    });
+  }
+  
+  return warnings;
+}
+
 function layerGroupToWkt(layerGroup) {
   let geometries = [];
-  let fixed = false;
+  let windingWarnings = [];
+  
   layerGroup.eachLayer(function(layer) {
     console.log(layer)
     const geo = layer.toGeoJSON();
-    const before = JSON.stringify(geo.geometry);
-    rewind(geo.geometry);
-    const after = JSON.stringify(geo.geometry);
-    if (before !== after) {
-      fixed = true;
-      layerGroup.removeLayer(layer);
-      const updatedLayer = L.geoJSON(geo);
-      layerGroup.addLayer(updatedLayer);
-    }
+    
+    // Check winding order without fixing it
     if (geo.type === "Feature") {
+      const warnings = checkWindingOrder(geo.geometry);
+      windingWarnings.push(...warnings);
       geometries = geometries.concat(splitGeometry(geo.geometry));
     } else if (geo.type === "FeatureCollection") {
       geo.features.forEach(feature => {
+        const warnings = checkWindingOrder(feature.geometry);
+        windingWarnings.push(...warnings);
         geometries = geometries.concat(splitGeometry(feature.geometry));
       });
     }
   });
-  if (fixed) {
-    toast("Fixed winding order", { icon: "↪" });
+  
+  // Show warnings for incorrect winding order
+  if (windingWarnings.length > 0) {
+    windingWarnings.forEach(warning => {
+      toast.error(warning, { 
+        icon: "⚠️",
+        duration: 8000,
+        style: {
+          maxWidth: '500px'
+        }
+      });
+    });
   }
+  
   const wktGeometries = geometries.map(geojsonToWKT);
   let wkt;
   if (wktGeometries.length === 1) {

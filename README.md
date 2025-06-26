@@ -51,10 +51,12 @@ A web application for parsing, visualizing, and sharing Well-Known Text (WKT) ge
 4. The WKT will be automatically generated in the text area
 
 ### Vertex Visualization
-When geometries are displayed, vertices are shown as colored markers:
-- **Red**: Polygon exterior ring vertices
-- **Orange**: Polygon hole vertices  
-- **Blue**: LineString vertices
+When geometries are displayed, vertices are shown as colored markers with zero-indexed numbers:
+- **Red**: Polygon exterior ring vertices (numbered 0, 1, 2, ...)
+- **Orange**: Polygon hole vertices (numbered 0, 1, 2, ...)  
+- **Blue**: LineString vertices (numbered 0, 1, 2, ...)
+
+Each vertex displays its index number starting from 0, making it easy to identify specific coordinates in the WKT geometry definition.
 
 ### Format Conversion Examples
 
@@ -229,3 +231,13 @@ For issues and questions:
 ---
 
 Visit [wktmap.com](https://wktmap.com) to use the live application.
+
+### Winding Order Validation
+The application now includes winding order validation for polygon geometries:
+- **Exterior rings** should follow counter-clockwise winding order
+- **Interior rings (holes)** should follow clockwise winding order
+- **Warning notifications** appear when incorrect winding order is detected
+- **Visual indication**: Polygons with incorrect winding order are displayed with red borders and fill instead of the default blue
+- **No automatic fixing** - the tool preserves original winding order for debugging purposes
+
+This feature helps debug polygon issues and ensures compliance with OGC Simple Feature standards. The visual highlighting makes it immediately apparent which polygons have winding order problems on the map.

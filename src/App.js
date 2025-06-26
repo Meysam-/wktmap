@@ -295,15 +295,174 @@ function App() {
   async function visualize(spatial) {
     groupRef.current.clearLayers();
     if (spatial.json) {
+      // First, add the normal geometry with default styling
       const conf = {
         pointToLayer: createCircleMarker,
+        style: {
+          opacity: 1,
+          fillOpacity: 0.2,
+          weight: 3,
+          color: "#3388ff",
+          fillColor: "#3388ff"
+        }
       };
+      
       let newLayer = L.geoJSON(spatial.json, conf).addTo(groupRef.current);
+      
+      // Then, add yellow overlays for rings with incorrect winding order
+      addIncorrectWindingOverlays(spatial.json, groupRef.current);
       
       // Add vertex markers for polygons
       addVertexMarkers(spatial.json, groupRef.current);
       
+      // Check winding order and show warnings
+      checkAndWarnWindingOrder(spatial.json);
+      
       if (map) map.flyToBounds(newLayer.getBounds(), { duration: 0.5, maxZoom: 14 });
+    }
+  }
+
+  // Function to add yellow overlays for rings with incorrect winding order
+  function addIncorrectWindingOverlays(geojson, layerGroup) {
+    // Function to calculate the signed area of a ring (for winding order detection)
+    function calculateSignedArea(ring) {
+      let area = 0;
+      for (let i = 0; i < ring.length - 1; i++) {
+        area += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+      }
+      return area / 2;
+    }
+
+    function processGeometry(geometry) {
+      if (geometry.type === 'Polygon') {
+        geometry.coordinates.forEach((ring, ringIndex) => {
+          const signedArea = calculateSignedArea(ring);
+          const isClockwise = signedArea > 0;
+          
+          let hasIncorrectWinding = false;
+          if (ringIndex === 0) {
+            // Exterior ring should be counter-clockwise
+            hasIncorrectWinding = isClockwise;
+          } else {
+            // Interior rings (holes) should be clockwise
+            hasIncorrectWinding = !isClockwise;
+          }
+          
+          if (hasIncorrectWinding) {
+            // Create a separate polygon for this specific ring with yellow styling
+            const ringGeometry = {
+              type: 'Polygon',
+              coordinates: [ring]
+            };
+            
+            const yellowOverlay = L.geoJSON(ringGeometry, {
+              style: {
+                opacity: 1,
+                fillOpacity: 0, // No fill, only border
+                weight: 4,
+                color: "#ffaa00", // Yellow border
+                fill: false
+              }
+            });
+            
+            layerGroup.addLayer(yellowOverlay);
+          }
+        });
+      } else if (geometry.type === 'MultiPolygon') {
+        geometry.coordinates.forEach(polygon => {
+          processGeometry({ type: 'Polygon', coordinates: polygon });
+        });
+      } else if (geometry.type === 'GeometryCollection') {
+        geometry.geometries.forEach(geom => {
+          processGeometry(geom);
+        });
+      }
+    }
+
+    if (geojson.type === 'Feature') {
+      processGeometry(geojson.geometry);
+    } else if (geojson.type === 'FeatureCollection') {
+      geojson.features.forEach(feature => {
+        processGeometry(feature.geometry);
+      });
+    } else if (geojson.type && geojson.coordinates) {
+      processGeometry(geojson);
+    }
+  }
+
+  // Function to check winding order and show warnings for any geometry
+  function checkAndWarnWindingOrder(geojson) {
+    // Function to calculate the signed area of a ring (for winding order detection)
+    function calculateSignedArea(ring) {
+      let area = 0;
+      for (let i = 0; i < ring.length - 1; i++) {
+        area += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+      }
+      return area / 2;
+    }
+
+    // Function to check winding order of a geometry
+    function checkWindingOrder(geometry) {
+      const warnings = [];
+      
+      function checkPolygon(coordinates, polygonIndex = 0) {
+        coordinates.forEach((ring, ringIndex) => {
+          const signedArea = calculateSignedArea(ring);
+          const isClockwise = signedArea > 0;
+          
+          if (ringIndex === 0) {
+            // Exterior ring should be counter-clockwise (negative signed area)
+            if (isClockwise) {
+              warnings.push(`Polygon ${polygonIndex + 1} exterior ring has incorrect winding order (clockwise instead of counter-clockwise)`);
+            }
+          } else {
+            // Interior rings (holes) should be clockwise (positive signed area)
+            if (!isClockwise) {
+              warnings.push(`Polygon ${polygonIndex + 1} hole ${ringIndex} has incorrect winding order (counter-clockwise instead of clockwise)`);
+            }
+          }
+        });
+      }
+      
+      if (geometry.type === 'Polygon') {
+        checkPolygon(geometry.coordinates);
+      } else if (geometry.type === 'MultiPolygon') {
+        geometry.coordinates.forEach((polygon, index) => {
+          checkPolygon(polygon, index);
+        });
+      } else if (geometry.type === 'GeometryCollection') {
+        geometry.geometries.forEach(geom => {
+          warnings.push(...checkWindingOrder(geom));
+        });
+      }
+      
+      return warnings;
+    }
+
+    let allWarnings = [];
+    
+    if (geojson.type === 'Feature') {
+      allWarnings = checkWindingOrder(geojson.geometry);
+    } else if (geojson.type === 'FeatureCollection') {
+      geojson.features.forEach(feature => {
+        allWarnings.push(...checkWindingOrder(feature.geometry));
+      });
+    } else if (geojson.type && geojson.coordinates) {
+      // Direct geometry object
+      allWarnings = checkWindingOrder(geojson);
+    }
+    
+    // Show warnings for incorrect winding order
+    if (allWarnings.length > 0) {
+      allWarnings.forEach(warning => {
+        toast.error(warning, { 
+          icon: "⚠️",
+          duration: 8000,
+          style: {
+            maxWidth: '500px'
+          }
+        });
+      });
     }
   }
 
@@ -317,14 +476,37 @@ function App() {
             // Skip the last coordinate as it's the same as the first (closing coordinate)
             if (coordIndex < ring.length - 1) {
               const vertexMarker = L.circleMarker([coord[1], coord[0]], {
-                radius: 3,
+                radius: 6,
                 fillColor: ringIndex === 0 ? '#ff0000' : '#ff8800', // Red for exterior, orange for holes
                 color: '#ffffff',
                 weight: 1,
                 opacity: 1,
                 fillOpacity: 0.8
               });
-              layerGroup.addLayer(vertexMarker);
+              
+              // Add vertex index as a DivIcon with number
+              const indexLabel = L.divIcon({
+                className: 'vertex-index-label',
+                html: `<div style="
+                  background: ${ringIndex === 0 ? '#ff0000' : '#ff8800'};
+                  color: white;
+                  border: 1px solid white;
+                  border-radius: 50%;
+                  width: 16px;
+                  height: 16px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 10px;
+                  font-weight: bold;
+                  font-family: Arial, sans-serif;
+                ">${coordIndex}</div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+              });
+              
+              const indexMarker = L.marker([coord[1], coord[0]], { icon: indexLabel });
+              layerGroup.addLayer(indexMarker);
             }
           });
         });
@@ -335,14 +517,37 @@ function App() {
       } else if (geometry.type === 'LineString') {
         geometry.coordinates.forEach((coord, coordIndex) => {
           const vertexMarker = L.circleMarker([coord[1], coord[0]], {
-            radius: 3,
+            radius: 6,
             fillColor: '#0000ff',
             color: '#ffffff',
             weight: 1,
             opacity: 1,
             fillOpacity: 0.8
           });
-          layerGroup.addLayer(vertexMarker);
+          
+          // Add vertex index as a DivIcon with number
+          const indexLabel = L.divIcon({
+            className: 'vertex-index-label',
+            html: `<div style="
+              background: #0000ff;
+              color: white;
+              border: 1px solid white;
+              border-radius: 50%;
+              width: 16px;
+              height: 16px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 10px;
+              font-weight: bold;
+              font-family: Arial, sans-serif;
+            ">${coordIndex}</div>`,
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          });
+          
+          const indexMarker = L.marker([coord[1], coord[0]], { icon: indexLabel });
+          layerGroup.addLayer(indexMarker);
         });
       } else if (geometry.type === 'MultiLineString') {
         geometry.coordinates.forEach(line => {
