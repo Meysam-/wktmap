@@ -333,19 +333,53 @@ function layerGroupToWkt(layerGroup) {
   
   layerGroup.eachLayer(function(layer) {
     console.log(layer)
-    const geo = layer.toGeoJSON();
     
-    // Check winding order without fixing it
-    if (geo.type === "Feature") {
-      const warnings = checkWindingOrder(geo.geometry);
-      windingWarnings.push(...warnings);
-      geometries = geometries.concat(splitGeometry(geo.geometry));
-    } else if (geo.type === "FeatureCollection") {
-      geo.features.forEach(feature => {
-        const warnings = checkWindingOrder(feature.geometry);
+    // Skip visualization layers by checking for specific properties
+    // Vertex markers have a divIcon, yellow overlays don't have feature properties from drawing
+    // Only process layers that were actually drawn by the user
+    
+    // Skip if this is a marker (vertex visualization)
+    if (layer instanceof L.Marker) {
+      return;
+    }
+    
+    // Skip if this is a visualization overlay (no feature properties or specific styling)
+    if (layer instanceof L.GeoJSON && layer.options && 
+        (layer.options.color === "#ffaa00" || // Yellow overlay color
+         layer.options.fillColor === '#ff0000' || // Red vertex markers
+         layer.options.fillColor === '#ff8800' || // Orange vertex markers  
+         layer.options.fillColor === '#0000ff')) { // Blue vertex markers
+      return;
+    }
+    
+    // Only process layers that appear to be actual drawn geometries
+    // These typically come from the EditControl and have proper feature properties
+    try {
+      const geo = layer.toGeoJSON();
+      
+      // Additional check: skip if this looks like a visualization layer
+      if (geo && geo.type === "Feature" && geo.geometry.type === "Point" && 
+          layer.options && (layer.options.radius === 6 || layer.options.radius === 4)) {
+        // This is likely a vertex marker, skip it
+        return;
+      }
+      
+      // Check winding order without fixing it
+      if (geo.type === "Feature") {
+        const warnings = checkWindingOrder(geo.geometry);
         windingWarnings.push(...warnings);
-        geometries = geometries.concat(splitGeometry(feature.geometry));
-      });
+        geometries = geometries.concat(splitGeometry(geo.geometry));
+      } else if (geo.type === "FeatureCollection") {
+        geo.features.forEach(feature => {
+          const warnings = checkWindingOrder(feature.geometry);
+          windingWarnings.push(...warnings);
+          geometries = geometries.concat(splitGeometry(feature.geometry));
+        });
+      }
+    } catch (error) {
+      // If toGeoJSON fails, this is likely a visualization layer, skip it
+      console.log("Skipping layer that couldn't be converted to GeoJSON:", error);
+      return;
     }
   });
   
