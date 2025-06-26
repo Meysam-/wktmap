@@ -1,6 +1,7 @@
 {
   "name": "wktmap",
   "version": "0.2.0",
+  "homepage": "https://meysam-.github.io/wktmap",
   "private": true,
   "dependencies": {
     "@mapbox/geojson-rewind": "^0.5.2",
