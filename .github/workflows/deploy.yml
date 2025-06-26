@@ -23,11 +23,6 @@ jobs:
       run: npm run build
     - name: Run tests
       run: npm run test
-    - name: Create cname file
-      uses: finnp/create-file-action@master
-      env:
-        FILE_NAME: "./build/CNAME"
-        FILE_DATA: "wktmap.com"
     - name: Deploy to gh-pages
       uses: peaceiris/actions-gh-pages@v3.6.1
       with:
