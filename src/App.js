@@ -12,6 +12,7 @@ import CRC32 from "crc-32";
 import { EditControl } from "react-leaflet-draw";
 import ReactGA from "react-ga4";
 import { transformInput, ValueError, getBbox, layerGroupToWkt } from "./wkt";
+import { transformGeoJSONToGreatCircle } from "./greatcircle";
 import toast, { Toaster } from "react-hot-toast";
 
 const DEFAULT_EPSG = "4326";
@@ -43,6 +44,7 @@ function App() {
   const [exampleIndex, setExampleIndex] = useState(0);
 
   const groupRef = useRef();
+  const visualizationLayerRef = useRef();
 
   const ensureResize = function (mapRef) {
     const resizeObserver = new ResizeObserver(() => {
@@ -136,6 +138,9 @@ function App() {
             }}
           />
         </FeatureGroup>
+        <FeatureGroup ref={visualizationLayerRef}>
+          {/* This layer group is for visualization only (great circle arcs, vertex markers, etc.) */}
+        </FeatureGroup>
       </MapContainer>
     }, [] // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -175,7 +180,7 @@ function App() {
       processInput({
         epsg: 4326,
         wkt: wktDraw
-      }, true); // Changed from false to true to enable visualization
+      }, true);
     }
   }
 
@@ -201,6 +206,15 @@ function App() {
   function handleWktClear() {
     clearHash();
     setWkt("");
+    
+    // Clear both drawing and visualization layers
+    if (groupRef.current) {
+      groupRef.current.clearLayers();
+    }
+    if (visualizationLayerRef.current) {
+      visualizationLayerRef.current.clearLayers();
+    }
+    
     processInput({
       epsg: epsg,
       wkt: ""
@@ -293,9 +307,26 @@ function App() {
   }
 
   async function visualize(spatial) {
-    groupRef.current.clearLayers();
-    if (spatial.json) {
-      // First, add the normal geometry with default styling
+    // Clear the visualization layer
+    if (visualizationLayerRef.current) {
+      visualizationLayerRef.current.clearLayers();
+    }
+    
+    // Hide the drawn geometries while showing the great circle visualization
+    if (groupRef.current) {
+      groupRef.current.eachLayer(layer => {
+        if (layer instanceof L.Path) {
+          // Hide the original drawn geometries
+          layer.setStyle({ opacity: 0, fillOpacity: 0 });
+        }
+      });
+    }
+    
+    if (spatial.json && visualizationLayerRef.current) {
+      // Transform the geometry to use great circle arcs for visualization
+      const greatCircleGeometry = transformGeoJSONToGreatCircle(spatial.json);
+      
+      // First, add the geometry with great circle arcs and default styling
       const conf = {
         pointToLayer: createCircleMarker,
         style: {
@@ -307,13 +338,15 @@ function App() {
         }
       };
 
-      let newLayer = L.geoJSON(spatial.json, conf).addTo(groupRef.current);
+      let newLayer = L.geoJSON(greatCircleGeometry, conf).addTo(visualizationLayerRef.current);
 
       // Then, add yellow overlays for rings with incorrect winding order
-      addIncorrectWindingOverlays(spatial.json, groupRef.current);
+      // Note: We use the original geometry (not great circle) for winding order checks
+      addIncorrectWindingOverlays(spatial.json, visualizationLayerRef.current);
 
       // Add vertex markers for polygons
-      addVertexMarkers(spatial.json, groupRef.current);
+      // Note: We use the original geometry (not great circle) for vertex markers
+      addVertexMarkers(spatial.json, visualizationLayerRef.current);
 
       // Check winding order and show warnings
       checkAndWarnWindingOrder(spatial.json);
@@ -355,7 +388,10 @@ function App() {
               coordinates: [ring]
             };
 
-            const yellowOverlay = L.geoJSON(ringGeometry, {
+            // Transform the yellow overlay to use great circle arcs as well
+            const greatCircleRingGeometry = transformGeoJSONToGreatCircle(ringGeometry);
+
+            const yellowOverlay = L.geoJSON(greatCircleRingGeometry, {
               style: {
                 opacity: 1,
                 fillOpacity: 0, // No fill, only border
