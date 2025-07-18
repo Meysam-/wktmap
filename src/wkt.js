@@ -403,4 +403,35 @@ function layerGroupToWkt(layerGroup) {
   return wkt;
 }
 
-export { parseWkt, transformInput, ValueError, fetchProj, extractAndParseCrs, getBbox, layerGroupToWkt, handleOtherFormats };
+// Function to convert MapboxDraw features to WKT
+function drawFeaturesToWkt(drawInstance) {
+  if (!drawInstance) return null;
+  
+  const features = drawInstance.getAll();
+  if (!features || !features.features || features.features.length === 0) {
+    return null;
+  }
+  
+  let geometries = [];
+  let windingWarnings = [];
+  
+  features.features.forEach(feature => {
+    if (feature.geometry) {
+      // Check winding order without fixing it
+      const warnings = checkWindingOrder(feature.geometry);
+      windingWarnings.push(...warnings);
+      geometries = geometries.concat(splitGeometry(feature.geometry));
+    }
+  });
+  
+  const wktGeometries = geometries.map(geojsonToWKT);
+  let wkt;
+  if (wktGeometries.length === 1) {
+    wkt = wktGeometries[0];
+  } else if (wktGeometries.length > 1) {
+    wkt = "GEOMETRYCOLLECTION (" + wktGeometries.join(", ") + ")";
+  }
+  return wkt;
+}
+
+export { parseWkt, transformInput, ValueError, fetchProj, extractAndParseCrs, getBbox, layerGroupToWkt, drawFeaturesToWkt, handleOtherFormats };
