@@ -6,6 +6,7 @@ import { Twitter } from "react-bootstrap-icons";
 import CRC32 from "crc-32";
 import ReactGA from "react-ga4";
 import { transformInput, ValueError, getBbox, drawFeaturesToWkt } from "./wkt";
+import { calculateSphericalSignedArea } from "./greatcircle";
 import toast, { Toaster } from "react-hot-toast";
 import SimpleMapLibreMap from "./SimpleMapLibreMap";
 
@@ -216,13 +217,9 @@ function App() {
 
   // Function to check winding order and show warnings for any geometry
   function checkAndWarnWindingOrder(geojson) {
-    // Function to calculate the signed area of a ring (for winding order detection)
+    // Function to calculate the signed area of a ring using spherical geometry
     function calculateSignedArea(ring) {
-      let area = 0;
-      for (let i = 0; i < ring.length - 1; i++) {
-        area += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
-      }
-      return area / 2;
+      return calculateSphericalSignedArea(ring);
     }
 
     // Function to check winding order of a geometry

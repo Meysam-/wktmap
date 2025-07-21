@@ -8,6 +8,10 @@ import { cellToBoundary } from "h3-js";
 import geohash from "ngeohash";
 import quadkeytools from "quadkeytools";
 import { geojsonToWKT } from "@terraformer/wkt";
+import { 
+  transformGeoJSONToGreatCircle, 
+  calculateSphericalSignedArea 
+} from './greatcircle.js';
 import proj4 from "proj4";
 import { register } from "ol/proj/proj4";
 import toast from "react-hot-toast";
@@ -279,13 +283,9 @@ function splitGeometry(geometry) {
   }
 }
 
-// Function to calculate the signed area of a ring (for winding order detection)
+// Function to calculate the signed area of a ring using spherical geometry
 function calculateSignedArea(ring) {
-  let area = 0;
-  for (let i = 0; i < ring.length - 1; i++) {
-    area += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
-  }
-  return area / 2;
+  return calculateSphericalSignedArea(ring);
 }
 
 // Function to check winding order of a geometry

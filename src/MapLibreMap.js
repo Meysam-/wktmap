@@ -4,7 +4,7 @@ import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import * as turf from '@turf/turf';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
-import { transformGeoJSONToGreatCircle } from './greatcircle';
+import { transformGeoJSONToGreatCircle, calculateSphericalSignedArea } from './greatcircle';
 
 const MapLibreMap = forwardRef(({
   onDrawStop,
@@ -207,11 +207,7 @@ const MapLibreMap = forwardRef(({
   // Function to add incorrect winding overlays
   const addIncorrectWindingOverlays = (geojson) => {
     const calculateSignedArea = (ring) => {
-      let area = 0;
-      for (let i = 0; i < ring.length - 1; i++) {
-        area += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
-      }
-      return area / 2;
+      return calculateSphericalSignedArea(ring);
     };
 
     const incorrectWindingFeatures = [];
