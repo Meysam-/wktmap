@@ -209,10 +209,16 @@ const SimpleMapLibreMap = forwardRef(({
 
       try {
         if (map.current.getSource('winding-warnings')) {
-          map.current.getSource('winding-warnings').setData({
+          // Transform warning features to great circle arcs just like the main visualization
+          const warningCollection = {
             type: 'FeatureCollection',
             features: warningFeatures || []
-          });
+          };
+          
+          // Apply the same great circle transformation used for the blue polygon
+          const greatCircleWarnings = transformGeoJSONToGreatCircle(warningCollection);
+          
+          map.current.getSource('winding-warnings').setData(greatCircleWarnings);
         }
       } catch (error) {
         console.error('Error visualizing winding order warnings:', error);
