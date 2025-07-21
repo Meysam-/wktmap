@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import { transformGeoJSONToGreatCircle } from './greatcircle';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 
@@ -31,6 +32,9 @@ const SimpleMapLibreMap = forwardRef(({
           map.current.getSource('visualization').setData({ type: 'FeatureCollection', features: [] });
         }
         
+        // Clear drawing great circles
+        clearDrawingGreatCircles();
+        
         // Clear winding warnings
         if (map.current.getSource('winding-warnings')) {
           map.current.getSource('winding-warnings').setData({ type: 'FeatureCollection', features: [] });
@@ -42,6 +46,8 @@ const SimpleMapLibreMap = forwardRef(({
       if (draw.current) {
         draw.current.deleteAll();
       }
+      // Also clear drawing great circles
+      clearDrawingGreatCircles();
     },
     visualizeGeometry: (geojson) => {
       console.log('Visualize geometry called with:', geojson);
@@ -54,14 +60,14 @@ const SimpleMapLibreMap = forwardRef(({
         // Clear previous vertex markers
         clearVertexMarkers();
         
-        // Add source and layers for visualization if they don't exist
+        // Add source and layers for great circle visualization if they don't exist
         if (!map.current.getSource('visualization')) {
           map.current.addSource('visualization', {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] }
           });
 
-          // Add fill layer for polygons
+          // Add great circle fill layer for polygons
           map.current.addLayer({
             id: 'visualization-fill',
             type: 'fill',
@@ -73,19 +79,19 @@ const SimpleMapLibreMap = forwardRef(({
             filter: ['==', '$type', 'Polygon']
           });
 
-          // Add stroke layer for all geometries
+          // Add great circle stroke layer - this shows the curved lines
           map.current.addLayer({
             id: 'visualization-stroke',
             type: 'line',
             source: 'visualization',
             paint: {
               'line-color': '#0080ff',
-              'line-width': 2
+              'line-width': 3
             },
             filter: ['in', '$type', 'Polygon', 'LineString']
           });
 
-          // Add points layer
+          // Add great circle points layer
           map.current.addLayer({
             id: 'visualization-points',
             type: 'circle',
@@ -144,10 +150,11 @@ const SimpleMapLibreMap = forwardRef(({
           };
         }
 
-        // Update the source data
-        map.current.getSource('visualization').setData(featureCollection);
+        // Transform geometry to great circle arcs and use as primary visualization
+        const greatCircleCollection = transformGeoJSONToGreatCircle(featureCollection);
+        map.current.getSource('visualization').setData(greatCircleCollection);
 
-        // Add vertex markers
+        // Add vertex markers (use original coordinates, not great circle interpolated ones)
         addVertexMarkers(featureCollection);
 
         // Calculate bounding box and fit the map
@@ -312,6 +319,95 @@ const SimpleMapLibreMap = forwardRef(({
     vertexMarkers.current.push(marker);
   };
 
+  // Functions for drawing great circle visualization
+  const updateDrawingGreatCircles = () => {
+    if (!draw.current || !map.current || !isMapLoaded) return;
+    
+    try {
+      const data = draw.current.getAll();
+      if (data.features.length > 0) {
+        // Filter out incomplete geometries and validate coordinates
+        const validFeatures = data.features.filter(feature => {
+          if (!feature.geometry || !feature.geometry.coordinates) return false;
+          
+          // Check if geometry has valid coordinates
+          if (feature.geometry.type === 'Polygon') {
+            return feature.geometry.coordinates.length > 0 && 
+                   feature.geometry.coordinates[0].length >= 3; // At least 3 points for a polygon
+          } else if (feature.geometry.type === 'LineString') {
+            return feature.geometry.coordinates.length >= 2; // At least 2 points for a line
+          } else if (feature.geometry.type === 'Point') {
+            return feature.geometry.coordinates.length === 2; // Valid point coordinates
+          }
+          
+          return true;
+        });
+
+        if (validFeatures.length > 0) {
+          const validData = {
+            type: 'FeatureCollection',
+            features: validFeatures
+          };
+          
+          // Transform drawing data to great circle and show it
+          const greatCircleData = transformGeoJSONToGreatCircle(validData);
+          
+          // Add drawing great circle source if it doesn't exist
+          if (!map.current.getSource('drawing-great-circle')) {
+            map.current.addSource('drawing-great-circle', {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] }
+            });
+            
+            // Add drawing great circle stroke layer (same style as final visualization)
+            map.current.addLayer({
+              id: 'drawing-great-circle-stroke',
+              type: 'line',
+              source: 'drawing-great-circle',
+              paint: {
+                'line-color': '#0080ff',
+                'line-width': 3
+              },
+              filter: ['in', '$type', 'Polygon', 'LineString']
+            });
+            
+            // Add drawing great circle fill layer (same style as final visualization)
+            map.current.addLayer({
+              id: 'drawing-great-circle-fill',
+              type: 'fill',
+              source: 'drawing-great-circle',
+              paint: {
+                'fill-color': '#0080ff',
+                'fill-opacity': 0.3
+              },
+              filter: ['==', '$type', 'Polygon']
+            });
+          }
+          
+          map.current.getSource('drawing-great-circle').setData(greatCircleData);
+        } else {
+          clearDrawingGreatCircles();
+        }
+      } else {
+        clearDrawingGreatCircles();
+      }
+    } catch (error) {
+      console.error('Error updating drawing great circles:', error);
+      // Don't show error to user for drawing updates, just clear the preview
+      clearDrawingGreatCircles();
+    }
+  };
+
+  const clearDrawingGreatCircles = () => {
+    try {
+      if (map.current && map.current.getSource && map.current.getSource('drawing-great-circle')) {
+        map.current.getSource('drawing-great-circle').setData({ type: 'FeatureCollection', features: [] });
+      }
+    } catch (error) {
+      console.error('Error clearing drawing great circles:', error);
+    }
+  };
+
   useEffect(() => {
     if (map.current) return; // Initialize map only once
 
@@ -378,7 +474,7 @@ const SimpleMapLibreMap = forwardRef(({
       // Add navigation control
       map.current.addControl(new maplibregl.NavigationControl(), 'top-left');
 
-      // Initialize drawing tools
+      // Initialize drawing tools with invisible drawing styles (we'll show great circle preview instead)
       draw.current = new MapboxDraw({
         displayControlsDefault: false,
         controls: {
@@ -389,7 +485,7 @@ const SimpleMapLibreMap = forwardRef(({
         },
         defaultMode: 'simple_select',
         styles: [
-          // Style for drawing lines and polygons
+          // Make drawing lines completely invisible - only show great circle arcs
           {
             'id': 'gl-draw-line',
             'type': 'line',
@@ -399,23 +495,21 @@ const SimpleMapLibreMap = forwardRef(({
               'line-join': 'round'
             },
             'paint': {
-              'line-color': '#D20C0C',
-              'line-dasharray': [0.2, 2],
-              'line-width': 2
+              'line-color': 'transparent',
+              'line-width': 0
             }
           },
-          // Style for drawing polygon fills
+          // Make drawing polygon fills invisible
           {
             'id': 'gl-draw-polygon-fill',
             'type': 'fill',
             'filter': ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
             'paint': {
-              'fill-color': '#D20C0C',
-              'fill-outline-color': '#D20C0C',
-              'fill-opacity': 0.1
+              'fill-color': 'transparent',
+              'fill-opacity': 0
             }
           },
-          // Style for drawing polygon strokes
+          // Make drawing polygon strokes invisible
           {
             'id': 'gl-draw-polygon-stroke-active',
             'type': 'line',
@@ -425,19 +519,43 @@ const SimpleMapLibreMap = forwardRef(({
               'line-join': 'round'
             },
             'paint': {
-              'line-color': '#D20C0C',
-              'line-dasharray': [0.2, 2],
-              'line-width': 2
+              'line-color': 'transparent',
+              'line-width': 0
             }
           },
-          // Style for drawing points
+          // Keep drawing points visible for vertex placement
           {
             'id': 'gl-draw-point',
             'type': 'circle',
             'filter': ['all', ['==', '$type', 'Point'], ['!=', 'mode', 'static']],
             'paint': {
+              'circle-radius': 6,
+              'circle-color': '#0080ff',
+              'circle-stroke-color': '#ffffff',
+              'circle-stroke-width': 2
+            }
+          },
+          // Keep drawing vertices visible (while drawing) - make them more prominent
+          {
+            'id': 'gl-draw-polygon-and-line-vertex-active',
+            'type': 'circle',
+            'filter': ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point']],
+            'paint': {
               'circle-radius': 5,
-              'circle-color': '#D20C0C'
+              'circle-color': '#ffffff',
+              'circle-stroke-color': '#0080ff',
+              'circle-stroke-width': 3
+            }
+          },
+          // Add midpoint vertices for easier editing
+          {
+            'id': 'gl-draw-polygon-midpoint',
+            'type': 'circle',
+            'filter': ['all', ['==', '$type', 'Point'], ['==', 'meta', 'midpoint']],
+            'paint': {
+              'circle-radius': 3,
+              'circle-color': '#0080ff',
+              'circle-opacity': 0.6
             }
           }
         ]
@@ -449,6 +567,10 @@ const SimpleMapLibreMap = forwardRef(({
       map.current.on('draw.create', (e) => {
         console.log('Draw create event:', e);
         console.log('Created features:', e.features);
+        
+        // Clear drawing great circles after creation
+        clearDrawingGreatCircles();
+        
         if (onDrawStop) {
           setTimeout(() => onDrawStop(), 100); // Small delay to ensure draw is complete
         }
@@ -457,6 +579,10 @@ const SimpleMapLibreMap = forwardRef(({
       map.current.on('draw.update', (e) => {
         console.log('Draw update event:', e);
         console.log('Updated features:', e.features);
+        
+        // Show great circle arcs during drawing updates
+        updateDrawingGreatCircles();
+        
         if (onDrawStop) {
           setTimeout(() => onDrawStop(), 100);
         }
@@ -465,6 +591,10 @@ const SimpleMapLibreMap = forwardRef(({
       map.current.on('draw.delete', (e) => {
         console.log('Draw delete event:', e);
         console.log('Deleted features:', e.features);
+        
+        // Clear drawing great circles after deletion
+        clearDrawingGreatCircles();
+        
         if (onDrawStop) {
           setTimeout(() => onDrawStop(), 100);
         }
@@ -473,11 +603,38 @@ const SimpleMapLibreMap = forwardRef(({
       // Add mode change handler for debugging
       map.current.on('draw.modechange', (e) => {
         console.log('Draw mode changed to:', e.mode);
+        
+        // Clear drawing great circles when switching modes
+        if (e.mode === 'simple_select') {
+          clearDrawingGreatCircles();
+        } else {
+          // Start showing great circles when entering drawing mode
+          setTimeout(() => updateDrawingGreatCircles(), 50);
+        }
       });
 
       // Add selection change handler
       map.current.on('draw.selectionchange', (e) => {
         console.log('Draw selection changed:', e.features);
+        
+        // Update great circles when selection changes
+        updateDrawingGreatCircles();
+      });
+
+      // Add mouse move event for drawing updates (throttled)
+      let lastUpdateTime = 0;
+      map.current.on('mousemove', () => {
+        if (draw.current) {
+          const mode = draw.current.getMode();
+          if (mode !== 'simple_select' && mode !== 'direct_select') {
+            // We're in drawing mode, update great circles (throttled to avoid too many updates)
+            const now = Date.now();
+            if (now - lastUpdateTime > 100) { // Throttle to every 100ms
+              lastUpdateTime = now;
+              updateDrawingGreatCircles();
+            }
+          }
+        }
       });
 
       // Add load event handler
