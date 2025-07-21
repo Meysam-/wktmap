@@ -302,4 +302,100 @@ function drawFeaturesToWkt(drawInstance) {
   return wkt;
 }
 
-export { parseWkt, transformInput, ValueError, fetchProj, extractAndParseCrs, getBbox, drawFeaturesToWkt, handleOtherFormats };
+function combineWktGeometries(existingWkt, newWkt) {
+  // If no existing WKT, just return the new WKT
+  if (!existingWkt || existingWkt.trim() === "") {
+    return newWkt;
+  }
+  
+  // If no new WKT, return the existing WKT
+  if (!newWkt || newWkt.trim() === "") {
+    return existingWkt;
+  }
+  
+  // Extract geometries from both WKT strings
+  const existingGeometries = [];
+  const newGeometries = [];
+  
+  // Parse existing WKT
+  const existingTrimmed = existingWkt.trim();
+  if (existingTrimmed.startsWith("GEOMETRYCOLLECTION")) {
+    // Extract geometries from within the GEOMETRYCOLLECTION
+    const match = existingTrimmed.match(/GEOMETRYCOLLECTION\s*\(\s*(.*)\s*\)$/i);
+    if (match) {
+      const geometriesStr = match[1];
+      const geometries = parseGeometryCollection(geometriesStr);
+      existingGeometries.push(...geometries);
+    }
+  } else {
+    // Single geometry
+    existingGeometries.push(existingTrimmed);
+  }
+  
+  // Parse new WKT
+  const newTrimmed = newWkt.trim();
+  if (newTrimmed.startsWith("GEOMETRYCOLLECTION")) {
+    // Extract geometries from within the GEOMETRYCOLLECTION
+    const match = newTrimmed.match(/GEOMETRYCOLLECTION\s*\(\s*(.*)\s*\)$/i);
+    if (match) {
+      const geometriesStr = match[1];
+      const geometries = parseGeometryCollection(geometriesStr);
+      newGeometries.push(...geometries);
+    }
+  } else {
+    // Single geometry
+    newGeometries.push(newTrimmed);
+  }
+  
+  // Combine all geometries
+  const allGeometries = [...existingGeometries, ...newGeometries];
+  
+  // Return appropriate format
+  if (allGeometries.length === 1) {
+    return allGeometries[0];
+  } else {
+    return "GEOMETRYCOLLECTION (" + allGeometries.join(", ") + ")";
+  }
+}
+
+function parseGeometryCollection(geometriesStr) {
+  const geometries = [];
+  let currentGeometry = "";
+  let parenthesisCount = 0;
+  let inQuotes = false;
+  
+  for (let i = 0; i < geometriesStr.length; i++) {
+    const char = geometriesStr[i];
+    
+    if (char === '"' && geometriesStr[i - 1] !== '\\') {
+      inQuotes = !inQuotes;
+    }
+    
+    if (!inQuotes) {
+      if (char === '(') {
+        parenthesisCount++;
+      } else if (char === ')') {
+        parenthesisCount--;
+      }
+    }
+    
+    if (char === ',' && parenthesisCount === 0 && !inQuotes) {
+      // End of current geometry
+      if (currentGeometry.trim()) {
+        geometries.push(currentGeometry.trim());
+      }
+      currentGeometry = "";
+    } else {
+      currentGeometry += char;
+    }
+  }
+  
+  // Add the last geometry
+  if (currentGeometry.trim()) {
+    geometries.push(currentGeometry.trim());
+  }
+  
+  return geometries;
+}
+
+export { parseWkt, transformInput, ValueError, fetchProj, extractAndParseCrs, getBbox, drawFeaturesToWkt, combineWktGeometries, handleOtherFormats };

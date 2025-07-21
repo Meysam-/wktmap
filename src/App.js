@@ -5,7 +5,7 @@ import examples from "./examples";
 import { Twitter } from "react-bootstrap-icons";
 import CRC32 from "crc-32";
 import ReactGA from "react-ga4";
-import { transformInput, ValueError, getBbox, drawFeaturesToWkt } from "./wkt";
+import { transformInput, ValueError, getBbox, drawFeaturesToWkt, combineWktGeometries } from "./wkt";
 import { calculateSphericalSignedArea } from "./greatcircle";
 import toast, { Toaster } from "react-hot-toast";
 import SimpleMapLibreMap from "./SimpleMapLibreMap";
@@ -67,11 +67,13 @@ function App() {
     setEpsg(4326);
     clearHash();
     if (wktDraw) {
-      setWkt(wktDraw);
+      // Combine existing WKT with newly drawn geometry
+      const combinedWkt = combineWktGeometries(wkt, wktDraw);
+      setWkt(combinedWkt);
       // Process input and visualize to show vertices for drawn polygons
       processInput({
         epsg: 4326,
-        wkt: wktDraw
+        wkt: combinedWkt
       }, true);
       
       // Clear the drawing data after processing to prevent duplicate display
