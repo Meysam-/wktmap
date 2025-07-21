@@ -6,6 +6,7 @@ import { Twitter } from "react-bootstrap-icons";
 import CRC32 from "crc-32";
 import ReactGA from "react-ga4";
 import { transformInput, ValueError, getBbox, drawFeaturesToWkt, combineWktGeometries } from "./wkt";
+import { geojsonToWKT } from "@terraformer/wkt";
 import { calculateSphericalSignedArea } from "./greatcircle";
 import toast, { Toaster } from "react-hot-toast";
 import SimpleMapLibreMap from "./SimpleMapLibreMap";
@@ -64,14 +65,50 @@ function App() {
     setMap(mapInstance);
   }
 
-  function handleDrawStop() {
+  async function handleDrawStop() {
     const wktDraw = drawFeaturesToWkt(mapRef.current?.getDraw());
-    setEpsg(4326);
     clearHash();
     if (wktDraw) {
-      // Combine existing WKT with newly drawn geometry
-      const combinedWkt = combineWktGeometries(wkt, wktDraw);
+      let existingWktIn4326 = wkt;
+      
+      // If current EPSG is not 4326, convert existing geometry to 4326 first
+      if (epsg !== "4326" && wkt && wkt.trim() !== "") {
+        try {
+          // Transform existing geometry from current EPSG to 4326
+          const transformedInput = await transformInput({
+            wkt: wkt,
+            epsg: epsg
+          });
+          
+          if (transformedInput.json) {
+            // Convert the transformed GeoJSON back to WKT
+            if (transformedInput.json.type === 'Feature') {
+              existingWktIn4326 = geojsonToWKT(transformedInput.json.geometry);
+            } else if (transformedInput.json.type === 'FeatureCollection') {
+              const geometries = transformedInput.json.features.map(f => f.geometry);
+              if (geometries.length === 1) {
+                existingWktIn4326 = geojsonToWKT(geometries[0]);
+              } else {
+                const wktGeometries = geometries.map(geojsonToWKT);
+                existingWktIn4326 = "GEOMETRYCOLLECTION (" + wktGeometries.join(", ") + ")";
+              }
+            } else {
+              // Direct geometry
+              existingWktIn4326 = geojsonToWKT(transformedInput.json);
+            }
+          }
+        } catch (error) {
+          console.error("Error converting existing geometry to 4326:", error);
+          // If conversion fails, just use the original WKT
+          existingWktIn4326 = wkt;
+        }
+      }
+      
+      // Combine existing WKT (now in 4326) with newly drawn geometry (already in 4326)
+      const combinedWkt = combineWktGeometries(existingWktIn4326, wktDraw);
       setWkt(combinedWkt);
+      setEpsg(4326);
+      
       // Process input and visualize to show vertices for drawn polygons
       processInput({
         epsg: 4326,
