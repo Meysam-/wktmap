@@ -75,11 +75,12 @@ function App() {
       
       // Clear the drawing data after processing to prevent duplicate display
       // The main visualization will show the great circle version
+      // Increased delay to ensure processInput completes and map has time to render
       setTimeout(() => {
         if (mapRef.current) {
           mapRef.current.clearDrawing();
         }
-      }, 200); // Delay to ensure processInput completes
+      }, 300); // Increased delay from 200ms to 300ms for better reliability
     }
   }
 

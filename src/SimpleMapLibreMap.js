@@ -16,6 +16,7 @@ const SimpleMapLibreMap = forwardRef(({
   const draw = useRef(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
+  const [layersInitialized, setLayersInitialized] = useState(false);
 
   // Expose map methods to parent component
   useImperativeHandle(ref, () => ({
@@ -217,10 +218,13 @@ const SimpleMapLibreMap = forwardRef(({
         console.error('Error visualizing winding order warnings:', error);
       }
     }
-  }), [isMapLoaded]); // Add isMapLoaded as dependency
+  }), [isMapLoaded, layersInitialized]); // Include both loading states as dependencies
 
   // Store vertex markers for cleanup
   const vertexMarkers = useRef([]);
+  
+  // Track drawing update state to prevent conflicts
+  const drawingUpdateInProgress = useRef(false);
 
   // Function to clear vertex markers
   const clearVertexMarkers = () => {
@@ -321,10 +325,18 @@ const SimpleMapLibreMap = forwardRef(({
 
   // Functions for drawing great circle visualization
   const updateDrawingGreatCircles = () => {
-    if (!draw.current || !map.current || !isMapLoaded) {
-      console.log('updateDrawingGreatCircles: Not ready - draw:', !!draw.current, 'map:', !!map.current, 'loaded:', isMapLoaded);
+    // Prevent concurrent updates
+    if (drawingUpdateInProgress.current) {
+      console.log('updateDrawingGreatCircles: Update already in progress, skipping');
       return;
     }
+    
+    if (!draw.current || !map.current || !isMapLoaded || !layersInitialized) {
+      console.log('updateDrawingGreatCircles: Not ready - draw:', !!draw.current, 'map:', !!map.current, 'loaded:', isMapLoaded, 'layers:', layersInitialized);
+      return;
+    }
+    
+    drawingUpdateInProgress.current = true;
     
     try {
       const data = draw.current.getAll();
@@ -393,42 +405,13 @@ const SimpleMapLibreMap = forwardRef(({
           const greatCircleData = transformGeoJSONToGreatCircle(validData);
           console.log('updateDrawingGreatCircles: Great circle data:', greatCircleData);
           
-          // Add drawing great circle source if it doesn't exist
-          if (!map.current.getSource('drawing-great-circle')) {
-            console.log('updateDrawingGreatCircles: Creating drawing-great-circle source and layers');
-            map.current.addSource('drawing-great-circle', {
-              type: 'geojson',
-              data: { type: 'FeatureCollection', features: [] }
-            });
-            
-            // Add drawing great circle stroke layer (brighter and thicker than main visualization)
-            map.current.addLayer({
-              id: 'drawing-great-circle-stroke',
-              type: 'line',
-              source: 'drawing-great-circle',
-              paint: {
-                'line-color': '#0080ff',
-                'line-width': 4, // Thicker for drawing feedback
-                'line-opacity': 1 // Full opacity
-              },
-              filter: ['in', '$type', 'Polygon', 'LineString']
-            });
-            
-            // Add drawing great circle fill layer
-            map.current.addLayer({
-              id: 'drawing-great-circle-fill',
-              type: 'fill',
-              source: 'drawing-great-circle',
-              paint: {
-                'fill-color': '#0080ff',
-                'fill-opacity': 0.3
-              },
-              filter: ['==', '$type', 'Polygon']
-            });
+          // Update the pre-created drawing great circle source
+          if (map.current.getSource('drawing-great-circle')) {
+            map.current.getSource('drawing-great-circle').setData(greatCircleData);
+            console.log('updateDrawingGreatCircles: Updated great circle visualization');
+          } else {
+            console.warn('updateDrawingGreatCircles: drawing-great-circle source not found');
           }
-          
-          map.current.getSource('drawing-great-circle').setData(greatCircleData);
-          console.log('updateDrawingGreatCircles: Updated great circle visualization');
         } else {
           console.log('updateDrawingGreatCircles: No valid or preview features, clearing');
           clearDrawingGreatCircles();
@@ -441,6 +424,9 @@ const SimpleMapLibreMap = forwardRef(({
       console.error('Error updating drawing great circles:', error);
       // Don't show error to user for drawing updates, just clear the preview
       clearDrawingGreatCircles();
+    } finally {
+      // Always reset the lock
+      drawingUpdateInProgress.current = false;
     }
   };
 
@@ -620,7 +606,8 @@ const SimpleMapLibreMap = forwardRef(({
         clearDrawingGreatCircles();
         
         if (onDrawStop) {
-          setTimeout(() => onDrawStop(), 100); // Small delay to ensure draw is complete
+          // Use a longer delay to ensure all processing is complete
+          setTimeout(() => onDrawStop(), 150);
         }
       });
 
@@ -629,10 +616,10 @@ const SimpleMapLibreMap = forwardRef(({
         console.log('Updated features:', e.features);
         
         // Show great circle arcs during drawing updates
-        updateDrawingGreatCircles();
+        setTimeout(() => updateDrawingGreatCircles(), 10);
         
         if (onDrawStop) {
-          setTimeout(() => onDrawStop(), 100);
+          setTimeout(() => onDrawStop(), 150);
         }
       });
 
@@ -644,7 +631,7 @@ const SimpleMapLibreMap = forwardRef(({
         clearDrawingGreatCircles();
         
         if (onDrawStop) {
-          setTimeout(() => onDrawStop(), 100);
+          setTimeout(() => onDrawStop(), 150);
         }
       });
 
@@ -656,8 +643,8 @@ const SimpleMapLibreMap = forwardRef(({
         if (e.mode === 'simple_select') {
           clearDrawingGreatCircles();
         } else {
-          // Start showing great circles when entering drawing mode
-          setTimeout(() => updateDrawingGreatCircles(), 50);
+          // Start showing great circles when entering drawing mode - with longer delay
+          setTimeout(() => updateDrawingGreatCircles(), 100);
         }
       });
 
@@ -665,14 +652,24 @@ const SimpleMapLibreMap = forwardRef(({
       map.current.on('draw.selectionchange', (e) => {
         console.log('Draw selection changed:', e.features);
         
-        // Update great circles when selection changes
-        updateDrawingGreatCircles();
+        // Update great circles when selection changes - with small delay
+        setTimeout(() => updateDrawingGreatCircles(), 30);
       });
 
-      // Add additional event listeners for better real-time feedback
+      // Simplified render event handler with throttling
+      let renderUpdateTimeout = null;
       map.current.on('draw.render', () => {
         console.log('Draw render event - updating great circles');
-        updateDrawingGreatCircles();
+        
+        // Clear previous timeout and set new one to avoid rapid fire updates
+        if (renderUpdateTimeout) {
+          clearTimeout(renderUpdateTimeout);
+        }
+        
+        renderUpdateTimeout = setTimeout(() => {
+          updateDrawingGreatCircles();
+          renderUpdateTimeout = null;
+        }, 25); // Throttle to 25ms
       });
 
       // Listen for click events during drawing for immediate updates
@@ -681,22 +678,32 @@ const SimpleMapLibreMap = forwardRef(({
           const mode = draw.current.getMode();
           if (mode !== 'simple_select' && mode !== 'direct_select') {
             console.log('Click during drawing - updating great circles');
-            setTimeout(() => updateDrawingGreatCircles(), 10); // Very short delay to let draw update
+            setTimeout(() => updateDrawingGreatCircles(), 50); // Increased delay for stability
           }
         }
       });
 
-      // Add mouse move event for drawing updates (more responsive throttling)
+      // Add mouse move event for drawing updates (more conservative throttling)
       let lastUpdateTime = 0;
+      let mouseMoveTimeout = null;
       map.current.on('mousemove', () => {
         if (draw.current) {
           const mode = draw.current.getMode();
           if (mode !== 'simple_select' && mode !== 'direct_select') {
             // We're in drawing mode, update great circles (throttled to avoid too many updates)
             const now = Date.now();
-            if (now - lastUpdateTime > 50) { // Reduced throttle to 50ms for more responsive feedback
+            if (now - lastUpdateTime > 100) { // Increased throttle to 100ms for stability
               lastUpdateTime = now;
-              updateDrawingGreatCircles();
+              
+              // Clear previous timeout and set new one
+              if (mouseMoveTimeout) {
+                clearTimeout(mouseMoveTimeout);
+              }
+              
+              mouseMoveTimeout = setTimeout(() => {
+                updateDrawingGreatCircles();
+                mouseMoveTimeout = null;
+              }, 50);
             }
           }
         }
@@ -707,6 +714,46 @@ const SimpleMapLibreMap = forwardRef(({
         console.log('Map loaded successfully with globe projection');
         setIsMapLoaded(true);
         setMapError(null);
+        
+        // Initialize drawing great circle layers immediately after map load
+        setTimeout(() => {
+          if (map.current && !map.current.getSource('drawing-great-circle')) {
+            console.log('Initializing drawing great circle layers after map load');
+            
+            map.current.addSource('drawing-great-circle', {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] }
+            });
+            
+            // Add drawing great circle stroke layer (brighter and thicker than main visualization)
+            map.current.addLayer({
+              id: 'drawing-great-circle-stroke',
+              type: 'line',
+              source: 'drawing-great-circle',
+              paint: {
+                'line-color': '#0080ff',
+                'line-width': 4, // Thicker for drawing feedback
+                'line-opacity': 1 // Full opacity
+              },
+              filter: ['in', '$type', 'Polygon', 'LineString']
+            });
+            
+            // Add drawing great circle fill layer
+            map.current.addLayer({
+              id: 'drawing-great-circle-fill',
+              type: 'fill',
+              source: 'drawing-great-circle',
+              paint: {
+                'fill-color': '#0080ff',
+                'fill-opacity': 0.3
+              },
+              filter: ['==', '$type', 'Polygon']
+            });
+            
+            setLayersInitialized(true);
+            console.log('Drawing great circle layers initialized');
+          }
+        }, 100); // Short delay to ensure map is fully ready
         
         if (onMapLoad) {
           onMapLoad(map.current);
@@ -739,8 +786,11 @@ const SimpleMapLibreMap = forwardRef(({
     return () => {
       if (map.current) {
         console.log('Cleaning up map');
+        // Clear any timeouts
+        clearVertexMarkers();
         map.current.remove();
         map.current = null;
+        setLayersInitialized(false);
       }
     };
   }, []); // Empty dependency array - initialize only once
