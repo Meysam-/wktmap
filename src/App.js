@@ -72,6 +72,14 @@ function App() {
         epsg: 4326,
         wkt: wktDraw
       }, true);
+      
+      // Clear the drawing data after processing to prevent duplicate display
+      // The main visualization will show the great circle version
+      setTimeout(() => {
+        if (mapRef.current) {
+          mapRef.current.clearDrawing();
+        }
+      }, 200); // Delay to ensure processInput completes
     }
   }
 
