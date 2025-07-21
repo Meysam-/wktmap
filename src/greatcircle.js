@@ -353,15 +353,6 @@ function calculateSphericalAngle(lonA, latA, lonB, latB, lonC, latC) {
   const y3 = Math.cos(latC) * Math.sin(lonC);
   const z3 = Math.sin(latC);
   
-  // Calculate vectors from B to A and B to C
-  const ba_x = x1 - x2;
-  const ba_y = y1 - y2;
-  const ba_z = z1 - z2;
-  
-  const bc_x = x3 - x2;
-  const bc_y = y3 - y2;
-  const bc_z = z3 - z2;
-  
   // Calculate the cross products to get normal vectors to the great circle planes
   const n1_x = y2 * z1 - z2 * y1; // Normal to plane containing origin, B, A
   const n1_y = z2 * x1 - x2 * z1;

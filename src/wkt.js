@@ -8,14 +8,9 @@ import { cellToBoundary } from "h3-js";
 import geohash from "ngeohash";
 import quadkeytools from "quadkeytools";
 import { geojsonToWKT } from "@terraformer/wkt";
-import { 
-  transformGeoJSONToGreatCircle, 
-  calculateSphericalSignedArea 
-} from './greatcircle.js';
 import proj4 from "proj4";
 import { register } from "ol/proj/proj4";
 import toast from "react-hot-toast";
-import L from "leaflet";
 
 const USE_WKT = false;
 
@@ -275,134 +270,6 @@ async function transformInput(input) {
 
 }
 
-function splitGeometry(geometry) {
-  if (geometry.type === "GeometryCollection") {
-    return geometry.geometries;
-  } else {
-    return [geometry];
-  }
-}
-
-// Function to calculate the signed area of a ring using spherical geometry
-function calculateSignedArea(ring) {
-  return calculateSphericalSignedArea(ring);
-}
-
-// Function to check winding order of a geometry
-function checkWindingOrder(geometry) {
-  const warnings = [];
-
-  function checkPolygon(coordinates, polygonIndex = 0) {
-    coordinates.forEach((ring, ringIndex) => {
-      const signedArea = calculateSignedArea(ring);
-      const isClockwise = signedArea > 0;
-
-      if (ringIndex === 0) {
-        // Exterior ring should be counter-clockwise (negative signed area)
-        if (isClockwise) {
-          warnings.push(`Polygon ${polygonIndex + 1} exterior ring has incorrect winding order (clockwise instead of counter-clockwise)`);
-        }
-      } else {
-        // Interior rings (holes) should be clockwise (positive signed area)
-        if (!isClockwise) {
-          warnings.push(`Polygon ${polygonIndex + 1} hole ${ringIndex} has incorrect winding order (counter-clockwise instead of clockwise)`);
-        }
-      }
-    });
-  }
-
-  if (geometry.type === 'Polygon') {
-    checkPolygon(geometry.coordinates);
-  } else if (geometry.type === 'MultiPolygon') {
-    geometry.coordinates.forEach((polygon, index) => {
-      checkPolygon(polygon, index);
-    });
-  } else if (geometry.type === 'GeometryCollection') {
-    geometry.geometries.forEach(geom => {
-      warnings.push(...checkWindingOrder(geom));
-    });
-  }
-
-  return warnings;
-}
-
-function layerGroupToWkt(layerGroup) {
-  let geometries = [];
-  let windingWarnings = [];
-
-  layerGroup.eachLayer(function (layer) {
-    console.log(layer)
-
-    // Skip visualization layers by checking for specific properties
-    // Vertex markers have a divIcon, yellow overlays don't have feature properties from drawing
-    // Only process layers that were actually drawn by the user
-
-    // Skip if this is a marker (vertex visualization)
-    if (layer instanceof L.Marker) {
-      return;
-    }
-
-    // Skip if this is a visualization overlay (no feature properties or specific styling)
-    if (layer instanceof L.GeoJSON && layer.options &&
-      (layer.options.color === "#ffaa00" || // Yellow overlay color
-        layer.options.fillColor === '#ff0000' || // Red vertex markers
-        layer.options.fillColor === '#ff8800' || // Orange vertex markers  
-        layer.options.fillColor === '#0000ff')) { // Blue vertex markers
-      return;
-    }
-
-    // Only process layers that appear to be actual drawn geometries
-    // These typically come from the EditControl and have proper feature properties
-    try {
-      const geo = layer.toGeoJSON();
-
-      // Additional check: skip if this looks like a visualization layer
-      if (geo && geo.type === "Feature" && geo.geometry.type === "Point" &&
-        layer.options && (layer.options.radius === 6 || layer.options.radius === 4)) {
-        // This is likely a vertex marker, skip it
-        return;
-      }
-
-      // Check winding order without fixing it
-      if (geo.type === "Feature") {
-        const warnings = checkWindingOrder(geo.geometry);
-        windingWarnings.push(...warnings);
-        geometries = geometries.concat(splitGeometry(geo.geometry));
-      } else if (geo.type === "FeatureCollection") {
-        geo.features.forEach(feature => {
-          const warnings = checkWindingOrder(feature.geometry);
-          windingWarnings.push(...warnings);
-          geometries = geometries.concat(splitGeometry(feature.geometry));
-        });
-      }
-    } catch (error) {
-      // If toGeoJSON fails, this is likely a visualization layer, skip it
-      console.log("Skipping layer that couldn't be converted to GeoJSON:", error);
-      return;
-    }
-  });
-
-  // Show warnings for incorrect winding order
-  // if (windingWarnings.length > 0) {
-  //   toast.error("The rings that are drawn on yellow have wrong winding order.", {
-  //     icon: "⚠️",
-  //     duration: 8000,
-  //     style: {
-  //       maxWidth: '500px'
-  //     }
-  //   });    
-  // }
-
-  const wktGeometries = geometries.map(geojsonToWKT);
-  let wkt;
-  if (wktGeometries.length === 1) {
-    wkt = wktGeometries[0];
-  } else if (wktGeometries.length > 1) {
-    wkt = "GEOMETRYCOLLECTION (" + wktGeometries.join(", ") + ")";
-  }
-  return wkt;
-}
-
 // Function to convert MapboxDraw features to WKT
 function drawFeaturesToWkt(drawInstance) {
   if (!drawInstance) return null;
@@ -413,14 +280,15 @@ function drawFeaturesToWkt(drawInstance) {
   }
   
   let geometries = [];
-  let windingWarnings = [];
   
   features.features.forEach(feature => {
     if (feature.geometry) {
-      // Check winding order without fixing it
-      const warnings = checkWindingOrder(feature.geometry);
-      windingWarnings.push(...warnings);
-      geometries = geometries.concat(splitGeometry(feature.geometry));
+      // Process geometries - split GeometryCollections
+      if (feature.geometry.type === "GeometryCollection") {
+        geometries = geometries.concat(feature.geometry.geometries);
+      } else {
+        geometries.push(feature.geometry);
+      }
     }
   });
   
@@ -434,4 +302,4 @@ function drawFeaturesToWkt(drawInstance) {
   return wkt;
 }
 
-export { parseWkt, transformInput, ValueError, fetchProj, extractAndParseCrs, getBbox, layerGroupToWkt, drawFeaturesToWkt, handleOtherFormats };
+export { parseWkt, transformInput, ValueError, fetchProj, extractAndParseCrs, getBbox, drawFeaturesToWkt, handleOtherFormats };

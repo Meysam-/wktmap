@@ -1,5 +1,5 @@
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Navbar, Container, Button, Form, Row, Col, Alert, InputGroup, Dropdown } from "react-bootstrap";
+import { Navbar, Container, Button, Form, Alert, InputGroup, Dropdown } from "react-bootstrap";
 import { React, useState, useEffect, useRef } from "react";
 import examples from "./examples";
 import { Twitter } from "react-bootstrap-icons";

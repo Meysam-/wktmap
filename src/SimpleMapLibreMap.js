@@ -18,6 +18,120 @@ const SimpleMapLibreMap = forwardRef(({
   const [mapError, setMapError] = useState(null);
   const [layersInitialized, setLayersInitialized] = useState(false);
 
+  // Store vertex markers for cleanup
+  const vertexMarkers = useRef([]);
+  
+  // Track drawing update state to prevent conflicts
+  const drawingUpdateInProgress = useRef(false);
+
+  // Function to clear vertex markers
+  const clearVertexMarkers = () => {
+    vertexMarkers.current.forEach(marker => marker.remove());
+    vertexMarkers.current = [];
+  };
+
+  // Function to add a single vertex marker - wrapped in useCallback to prevent dependency changes
+  const addVertexMarker = useCallback((coord, index, color) => {
+    // Create a DOM element for the marker
+    const el = document.createElement('div');
+    el.className = 'vertex-marker';
+    el.style.cssText = `
+      background-color: ${color};
+      color: white;
+      border: 2px solid white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      line-height: 1;
+      text-align: center;
+      user-select: none;
+      pointer-events: auto;
+    `;
+    el.textContent = index.toString();
+
+    // Add click handler
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log(`Vertex ${index} clicked at [${coord[0]}, ${coord[1]}]`);
+    });
+
+    // Create and add marker
+    const marker = new maplibregl.Marker({
+      element: el,
+      anchor: 'center'
+    })
+      .setLngLat(coord)
+      .addTo(map.current);
+
+    vertexMarkers.current.push(marker);
+  }, []); // Empty dependency array since the function doesn't depend on any reactive values
+
+  // Function to add vertices for a specific geometry
+  const addVerticesForGeometry = useCallback((geometry) => {
+    if (geometry.type === 'Polygon') {
+      // Red markers for exterior ring
+      geometry.coordinates[0].forEach((coord, index) => {
+        if (index < geometry.coordinates[0].length - 1) { // Skip last coordinate (same as first)
+          addVertexMarker(coord, index, 'red');
+        }
+      });
+      
+      // Orange markers for holes
+      for (let i = 1; i < geometry.coordinates.length; i++) {
+        geometry.coordinates[i].forEach((coord, index) => {
+          if (index < geometry.coordinates[i].length - 1) { // Skip last coordinate (same as first)
+            addVertexMarker(coord, index, 'orange');
+          }
+        });
+      }
+    } else if (geometry.type === 'LineString') {
+      // Blue markers for line vertices
+      geometry.coordinates.forEach((coord, index) => {
+        addVertexMarker(coord, index, 'blue');
+      });
+    } else if (geometry.type === 'MultiPolygon') {
+      geometry.coordinates.forEach(polygon => {
+        addVerticesForGeometry({ type: 'Polygon', coordinates: polygon });
+      });
+    } else if (geometry.type === 'MultiLineString') {
+      geometry.coordinates.forEach(line => {
+        addVerticesForGeometry({ type: 'LineString', coordinates: line });
+      });
+    } else if (geometry.type === 'GeometryCollection') {
+      geometry.geometries.forEach(geom => {
+        addVerticesForGeometry(geom);
+      });
+    }
+  }, [addVertexMarker]);
+
+  // Function to add vertex markers with numbered labels
+  const addVertexMarkers = useCallback((featureCollection) => {
+    featureCollection.features.forEach(feature => {
+      if (feature.geometry) {
+        addVerticesForGeometry(feature.geometry);
+      }
+    });
+  }, [addVerticesForGeometry]);
+
+  // Functions for drawing great circle visualization - memoized to prevent stale closures
+  const clearDrawingGreatCircles = useCallback(() => {
+    try {
+      if (map.current && map.current.getSource && map.current.getSource('drawing-great-circle')) {
+        map.current.getSource('drawing-great-circle').setData({ type: 'FeatureCollection', features: [] });
+      }
+    } catch (error) {
+      console.error('Error clearing drawing great circles:', error);
+    }
+  }, []);
+
   // Expose map methods to parent component
   useImperativeHandle(ref, () => ({
     getMap: () => map.current,
@@ -224,121 +338,7 @@ const SimpleMapLibreMap = forwardRef(({
         console.error('Error visualizing winding order warnings:', error);
       }
     }
-  }), [isMapLoaded, layersInitialized]); // Include both loading states as dependencies
-
-  // Store vertex markers for cleanup
-  const vertexMarkers = useRef([]);
-  
-  // Track drawing update state to prevent conflicts
-  const drawingUpdateInProgress = useRef(false);
-
-  // Function to clear vertex markers
-  const clearVertexMarkers = () => {
-    vertexMarkers.current.forEach(marker => marker.remove());
-    vertexMarkers.current = [];
-  };
-
-  // Function to add vertex markers with numbered labels
-  const addVertexMarkers = (featureCollection) => {
-    featureCollection.features.forEach(feature => {
-      if (feature.geometry) {
-        addVerticesForGeometry(feature.geometry);
-      }
-    });
-  };
-
-  // Function to add vertices for a specific geometry
-  const addVerticesForGeometry = (geometry) => {
-    if (geometry.type === 'Polygon') {
-      // Red markers for exterior ring
-      geometry.coordinates[0].forEach((coord, index) => {
-        if (index < geometry.coordinates[0].length - 1) { // Skip last coordinate (same as first)
-          addVertexMarker(coord, index, 'red');
-        }
-      });
-      
-      // Orange markers for holes
-      for (let i = 1; i < geometry.coordinates.length; i++) {
-        geometry.coordinates[i].forEach((coord, index) => {
-          if (index < geometry.coordinates[i].length - 1) { // Skip last coordinate (same as first)
-            addVertexMarker(coord, index, 'orange');
-          }
-        });
-      }
-    } else if (geometry.type === 'LineString') {
-      // Blue markers for line vertices
-      geometry.coordinates.forEach((coord, index) => {
-        addVertexMarker(coord, index, 'blue');
-      });
-    } else if (geometry.type === 'MultiPolygon') {
-      geometry.coordinates.forEach(polygon => {
-        addVerticesForGeometry({ type: 'Polygon', coordinates: polygon });
-      });
-    } else if (geometry.type === 'MultiLineString') {
-      geometry.coordinates.forEach(line => {
-        addVerticesForGeometry({ type: 'LineString', coordinates: line });
-      });
-    } else if (geometry.type === 'GeometryCollection') {
-      geometry.geometries.forEach(geom => {
-        addVerticesForGeometry(geom);
-      });
-    }
-  };
-
-  // Function to add a single vertex marker
-  const addVertexMarker = (coord, index, color) => {
-    // Create a DOM element for the marker
-    const el = document.createElement('div');
-    el.className = 'vertex-marker';
-    el.style.cssText = `
-      background-color: ${color};
-      color: white;
-      border: 2px solid white;
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: bold;
-      font-family: Arial, sans-serif;
-      cursor: pointer;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      line-height: 1;
-      text-align: center;
-      user-select: none;
-      pointer-events: auto;
-    `;
-    el.textContent = index.toString();
-
-    // Add click handler
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      console.log(`Vertex ${index} clicked at [${coord[0]}, ${coord[1]}]`);
-    });
-
-    // Create and add marker
-    const marker = new maplibregl.Marker({
-      element: el,
-      anchor: 'center'
-    })
-      .setLngLat(coord)
-      .addTo(map.current);
-
-    vertexMarkers.current.push(marker);
-  };
-
-  // Functions for drawing great circle visualization - memoized to prevent stale closures
-  const clearDrawingGreatCircles = useCallback(() => {
-    try {
-      if (map.current && map.current.getSource && map.current.getSource('drawing-great-circle')) {
-        map.current.getSource('drawing-great-circle').setData({ type: 'FeatureCollection', features: [] });
-      }
-    } catch (error) {
-      console.error('Error clearing drawing great circles:', error);
-    }
-  }, []);
+  }), [isMapLoaded, addVertexMarkers, clearDrawingGreatCircles]); // Include all dependencies
 
   const updateDrawingGreatCircles = useCallback(() => {
     // Prevent concurrent updates
@@ -827,7 +827,8 @@ const SimpleMapLibreMap = forwardRef(({
         setLayersInitialized(false);
       }
     };
-  }, []); // Empty dependency array - initialize only once
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Empty dependency array intentional - map should only initialize once
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
