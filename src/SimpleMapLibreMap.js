@@ -699,7 +699,7 @@ const SimpleMapLibreMap = forwardRef(({
           polygon: true,
           line_string: true,
           point: true,
-          trash: true
+          trash: false // Remove delete button - we have external clear button
         },
         defaultMode: 'simple_select',
         styles: [
@@ -781,6 +781,7 @@ const SimpleMapLibreMap = forwardRef(({
         ]
       });
       
+      // Add drawing controls with custom positioning
       map.current.addControl(draw.current, 'top-right');
 
       // Add load event handler
@@ -833,32 +834,121 @@ const SimpleMapLibreMap = forwardRef(({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <style>{`
+        /* Custom styled drawing controls */
+        .maplibregl-ctrl-top-right {
+          top: 20px !important;
+          right: 20px !important;
+        }
+        
         .mapbox-gl-draw_ctrl-draw-btn {
-          background-color: #fff !important;
-          border: 1px solid #ccc !important;
-          border-radius: 2px !important;
+          background-color: #ffffff !important;
+          border: 2px solid #e0e0e0 !important;
+          border-radius: 8px !important;
           cursor: pointer !important;
           display: block !important;
-          float: left !important;
-          height: 29px !important;
-          width: 29px !important;
+          float: none !important;
+          margin-bottom: 8px !important;
+          height: 40px !important;
+          width: 40px !important;
           background-repeat: no-repeat !important;
           background-position: center !important;
+          background-size: 20px 20px !important;
           pointer-events: auto !important;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+          transition: all 0.2s ease !important;
+          position: relative !important;
         }
         
         .mapbox-gl-draw_ctrl-draw-btn:hover {
-          background-color: #f8f8f8 !important;
+          background-color: #f8f9fa !important;
+          border-color: #007bff !important;
+          transform: translateY(-1px) !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
         }
         
         .mapbox-gl-draw_ctrl-draw-btn.active {
-          background-color: #4264fb !important;
+          background-color: #007bff !important;
+          border-color: #007bff !important;
+          box-shadow: 0 2px 8px rgba(0,123,255,0.3) !important;
+        }
+        
+        /* Polygon button - Green */
+        .mapbox-gl-draw_ctrl-draw-btn[title*="Polygon"] {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2328a745' stroke-width='2'%3E%3Cpolygon points='12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5'/%3E%3C/svg%3E") !important;
+        }
+        
+        .mapbox-gl-draw_ctrl-draw-btn[title*="Polygon"]:hover {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23218838' stroke-width='2'%3E%3Cpolygon points='12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5'/%3E%3C/svg%3E") !important;
+        }
+        
+        .mapbox-gl-draw_ctrl-draw-btn[title*="Polygon"].active {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpolygon points='12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5'/%3E%3C/svg%3E") !important;
+        }
+        
+        /* Line button - Blue */
+        .mapbox-gl-draw_ctrl-draw-btn[title*="LineString"] {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23007bff' stroke-width='2'%3E%3Cpath d='M3 17l6-6 4 4 8-8'/%3E%3Ccircle cx='3' cy='17' r='2' fill='%23007bff'/%3E%3Ccircle cx='9' cy='11' r='2' fill='%23007bff'/%3E%3Ccircle cx='13' cy='15' r='2' fill='%23007bff'/%3E%3Ccircle cx='21' cy='7' r='2' fill='%23007bff'/%3E%3C/svg%3E") !important;
+        }
+        
+        .mapbox-gl-draw_ctrl-draw-btn[title*="LineString"]:hover {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230056b3' stroke-width='2'%3E%3Cpath d='M3 17l6-6 4 4 8-8'/%3E%3Ccircle cx='3' cy='17' r='2' fill='%230056b3'/%3E%3Ccircle cx='9' cy='11' r='2' fill='%230056b3'/%3E%3Ccircle cx='13' cy='15' r='2' fill='%230056b3'/%3E%3Ccircle cx='21' cy='7' r='2' fill='%230056b3'/%3E%3C/svg%3E") !important;
+        }
+        
+        .mapbox-gl-draw_ctrl-draw-btn[title*="LineString"].active {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M3 17l6-6 4 4 8-8'/%3E%3Ccircle cx='3' cy='17' r='2' fill='white'/%3E%3Ccircle cx='9' cy='11' r='2' fill='white'/%3E%3Ccircle cx='13' cy='15' r='2' fill='white'/%3E%3Ccircle cx='21' cy='7' r='2' fill='white'/%3E%3C/svg%3E") !important;
+        }
+        
+        /* Point button - Orange */
+        .mapbox-gl-draw_ctrl-draw-btn[title*="Point"] {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fd7e14'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3C/svg%3E") !important;
+        }
+        
+        .mapbox-gl-draw_ctrl-draw-btn[title*="Point"]:hover {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e8590c'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3C/svg%3E") !important;
+        }
+        
+        .mapbox-gl-draw_ctrl-draw-btn[title*="Point"].active {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3C/svg%3E") !important;
         }
         
         .maplibregl-ctrl-group {
-          background: #fff !important;
+          background: transparent !important;
+          border-radius: 8px !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        
+        /* Fix navigation controls background */
+        .maplibregl-ctrl-top-left .maplibregl-ctrl-group {
+          background: #ffffff !important;
           border-radius: 4px !important;
-          box-shadow: 0 0 0 2px rgba(0,0,0,.1) !important;
+          box-shadow: 0 0 0 2px rgba(0,0,0,0.1) !important;
+          border: 1px solid #e0e0e0 !important;
+        }
+        
+        .maplibregl-ctrl-zoom-in,
+        .maplibregl-ctrl-zoom-out,
+        .maplibregl-ctrl-compass {
+          background-color: #ffffff !important;
+          color: #333 !important;
+        }
+        
+        .maplibregl-ctrl-zoom-in:hover,
+        .maplibregl-ctrl-zoom-out:hover,
+        .maplibregl-ctrl-compass:hover {
+          background-color: #f8f9fa !important;
+        }
+        
+        .maplibregl-ctrl-group > button {
+          background: transparent !important;
+          border: none !important;
+        }
+        
+        /* Only apply transparent background to drawing controls */
+        .maplibregl-ctrl-top-right .maplibregl-ctrl-group {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
         }
         
         .vertex-marker {
