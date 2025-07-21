@@ -34,6 +34,8 @@ function App() {
   const mapRef = useRef();
 
   useEffect(() => {
+    if (!map) return; // Only run when map is ready
+    
     async function fetchWkt(hash) {
       const res = await fetch("https://xpjpbiqaa3.execute-api.us-east-1.amazonaws.com/prod/wkt/" + hash);
       if (res.status === 200) {
