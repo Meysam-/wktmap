@@ -168,12 +168,26 @@ function transformPolygonToGreatCircle(coordinates) {
     
     // Create a LineString from the ring (excluding the duplicate last point)
     const lineCoords = ring.slice(0, -1);
-    const transformedLine = transformLineStringToGreatCircle(lineCoords);
+    const result = [];
+    
+    // Process each edge of the polygon, including the closing edge
+    for (let i = 0; i < lineCoords.length; i++) {
+      const [lon1, lat1] = lineCoords[i];
+      const [lon2, lat2] = lineCoords[(i + 1) % lineCoords.length]; // Use modulo to wrap around
+      
+      const segments = calculateSegments(lat1, lon1, lat2, lon2);
+      const arcPoints = generateGreatCircleArc(lat1, lon1, lat2, lon2, segments);
+      
+      // Add all points except the last one (to avoid duplication)
+      for (let j = 0; j < arcPoints.length - 1; j++) {
+        result.push(arcPoints[j]);
+      }
+    }
     
     // Close the ring by adding the first point as the last point
-    transformedLine.push(transformedLine[0]);
+    result.push(result[0]);
     
-    return transformedLine;
+    return result;
   });
 }
 
