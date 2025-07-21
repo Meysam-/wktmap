@@ -322,44 +322,31 @@ function App() {
       <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
 
       <Navbar bg="light" expand="lg">
-        <Container>
+        <Container fluid>
           <Navbar.Brand href="/">
             Well-known Text (WKT) visualization
           </Navbar.Brand>
         </Container>
       </Navbar>
 
-      <SimpleMapLibreMap
-        ref={mapRef}
-        onMapLoad={handleMapLoad}
-        onDrawStop={handleDrawStop}
-        center={[0, 20]}
-        zoom={1.5}
-      />
+      <div id="main-content">
+        <div id="map-container">
+          <SimpleMapLibreMap
+            ref={mapRef}
+            onMapLoad={handleMapLoad}
+            onDrawStop={handleDrawStop}
+            center={[0, 20]}
+            zoom={1.5}
+          />
+        </div>
 
-      <Container className="mt-3 mb-3">
-
-        <Row>
-          <Col lg={true} className="mb-3">
+        <div id="controls-container">
+          <Container fluid className="p-3 h-100">
             <Form.Group className="mb-3" controlId="wkt">
               <Form.Label>WKT</Form.Label>
-              <Form.Control className="font-monospace" as="textarea" rows={8} value={wkt} onChange={handleWktChange} />
+              <Form.Control className="font-monospace" as="textarea" rows={12} value={wkt} onChange={handleWktChange} />
             </Form.Group>
-            <div className="d-flex d-md-block justify-content-between">
-              <Button className="me-2" variant="light" onClick={loadExample}>Load example</Button>
-              <Button className="me-2" variant="warning" onClick={handleWktClear}>Clear</Button>
-              <Dropdown className="me-2 d-inline-block">
-                <Dropdown.Toggle variant="light">Copy as</Dropdown.Toggle>
-                <Dropdown.Menu>
-                  {
-                    Object.keys(formats).map(format => <Dropdown.Item key={format} disabled={error || !json} onClick={() => handleCopy(format)}>{formats[format]}</Dropdown.Item>)
-                  }
-                </Dropdown.Menu>
-              </Dropdown>
-              <Button className="me-2" variant="success" onClick={handleShare}>Share</Button>
-            </div>
-          </Col>
-          <Col lg={true} className="mb-3">
+            
             <Form.Group className="mb-3" controlId="epsg">
               <Form.Label>EPSG</Form.Label>
               <InputGroup>
@@ -367,17 +354,30 @@ function App() {
                 <Form.Control value={epsg} onChange={handleEpsgChange} />
               </InputGroup>
             </Form.Group>
-            {
-              error && <Alert variant="danger">{error}</Alert>
-            }
-          </Col>
-        </Row>
-      </Container>
+            
+            {error && <Alert variant="danger">{error}</Alert>}
+            
+            <div className="d-grid gap-2 mb-3">
+              <Button variant="light" onClick={loadExample}>Load example</Button>
+              <Button variant="warning" onClick={handleWktClear}>Clear</Button>
+              <Dropdown>
+                <Dropdown.Toggle variant="light" className="w-100">Copy as</Dropdown.Toggle>
+                <Dropdown.Menu className="w-100">
+                  {
+                    Object.keys(formats).map(format => <Dropdown.Item key={format} disabled={error || !json} onClick={() => handleCopy(format)}>{formats[format]}</Dropdown.Item>)
+                  }
+                </Dropdown.Menu>
+              </Dropdown>
+              <Button variant="success" onClick={handleShare}>Share</Button>
+            </div>
+          </Container>
+        </div>
+      </div>
 
-      <footer className="footer mt-auto pt-5 pb-4 bg-light">
-        <Container>
-          <p className="text-muted">This page parses, visualizes, and shares <a href="https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry" rel="noreferrer" className="text-muted" target="_blank">WKT</a> (ISO 13249) as well as <a href="https://opengeospatial.github.io/ogc-geosparql/geosparql11/spec.html#_rdfs_datatype_geowktliteral" target="blank" rel="noreferrer" className="text-muted">geo:wktLiteral</a> strings in a variety of coordinate reference systems. Built with <a href="https://openlayers.org/" target="blank" rel="noreferrer" className="text-muted">OpenLayers</a>, <a href="https://maplibre.org/" target="blank" rel="noreferrer" className="text-muted">MapLibre GL JS</a>, <a href="https://trac.osgeo.org/proj4js" target="blank" rel="noreferrer" className="text-muted">Proj4js</a>, <a href="https://github.com/terraformer-js/terraformer" target="blank" rel="noreferrer" className="text-muted">terraformer</a>, and <a href="https://epsg.io/" target="blank" rel="noreferrer" className="text-muted">epsg.io</a>. Use the drawing tools to create your own geometries. Copy as Well-known Binary (WKB) or Extended Well-known Binary (EWKB). Also supports <a href="https://h3geo.org/" rel="noreferrer" className="text-muted" target="_blank">Uber H3</a>, <a href="https://en.wikipedia.org/wiki/Geohash" rel="noreferrer" className="text-muted" target="_blank">Geohash</a>, <a href="https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system" rel="noreferrer" className="text-muted" target="_blank">Quadkey</a>, WKB, and WFS BBOX conversion to WKT.</p>
-          <p className="text-muted">Created by <Twitter className="mb-1" /> <a rel="noreferrer" className="text-muted" href="https://twitter.com/PieterPrvst" target="_blank">PieterPrvst</a></p>
+      <footer className="footer mt-auto pt-3 pb-3 bg-light">
+        <Container fluid>
+          <p className="text-muted small">This page parses, visualizes, and shares <a href="https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry" rel="noreferrer" className="text-muted" target="_blank">WKT</a> (ISO 13249) as well as <a href="https://opengeospatial.github.io/ogc-geosparql/geosparql11/spec.html#_rdfs_datatype_geowktliteral" target="blank" rel="noreferrer" className="text-muted">geo:wktLiteral</a> strings in a variety of coordinate reference systems. Built with <a href="https://openlayers.org/" target="blank" rel="noreferrer" className="text-muted">OpenLayers</a>, <a href="https://maplibre.org/" target="blank" rel="noreferrer" className="text-muted">MapLibre GL JS</a>, <a href="https://trac.osgeo.org/proj4js" target="blank" rel="noreferrer" className="text-muted">Proj4js</a>, <a href="https://github.com/terraformer-js/terraformer" target="blank" rel="noreferrer" className="text-muted">terraformer</a>, and <a href="https://epsg.io/" target="blank" rel="noreferrer" className="text-muted">epsg.io</a>. Use the drawing tools to create your own geometries. Copy as Well-known Binary (WKB) or Extended Well-known Binary (EWKB). Also supports <a href="https://h3geo.org/" rel="noreferrer" className="text-muted" target="_blank">Uber H3</a>, <a href="https://en.wikipedia.org/wiki/Geohash" rel="noreferrer" className="text-muted" target="_blank">Geohash</a>, <a href="https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system" rel="noreferrer" className="text-muted" target="_blank">Quadkey</a>, WKB, and WFS BBOX conversion to WKT.</p>
+          <p className="text-muted small">Created by <Twitter className="mb-1" /> <a rel="noreferrer" className="text-muted" href="https://twitter.com/PieterPrvst" target="_blank">PieterPrvst</a></p>
         </Container>
       </footer>
 

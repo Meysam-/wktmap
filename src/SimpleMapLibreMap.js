@@ -485,7 +485,7 @@ const SimpleMapLibreMap = forwardRef(({
         },
         defaultMode: 'simple_select',
         styles: [
-          // Make drawing lines completely invisible - only show great circle arcs
+          // Make drawing lines invisible - only show great circle arcs
           {
             'id': 'gl-draw-line',
             'type': 'line',
@@ -681,7 +681,7 @@ const SimpleMapLibreMap = forwardRef(({
   }, []); // Empty dependency array - initialize only once
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '50vh', minHeight: '400px' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <style>{`
         .mapbox-gl-draw_ctrl-draw-btn {
           background-color: #fff !important;
