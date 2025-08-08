@@ -9,7 +9,8 @@ const SimpleMapLibreMap = forwardRef(({
   onMapLoad,
   onDrawStop,
   center = [0, 10],
-  zoom = 1
+  zoom = 1,
+  showVertexNumbers = true
 }, ref) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -17,6 +18,8 @@ const SimpleMapLibreMap = forwardRef(({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
   const [layersInitialized, setLayersInitialized] = useState(false);
+  // Store original (non-great-circle-subdivided) feature collection for vertex markers
+  const originalFeatureCollectionRef = useRef(null);
 
   // Store vertex markers for cleanup
   const vertexMarkers = useRef([]);
@@ -114,12 +117,13 @@ const SimpleMapLibreMap = forwardRef(({
 
   // Function to add vertex markers with numbered labels
   const addVertexMarkers = useCallback((featureCollection) => {
+    if (!showVertexNumbers) return;
     featureCollection.features.forEach(feature => {
       if (feature.geometry) {
         addVerticesForGeometry(feature.geometry);
       }
     });
-  }, [addVerticesForGeometry]);
+  }, [addVerticesForGeometry, showVertexNumbers]);
 
   // Functions for drawing great circle visualization - memoized to prevent stale closures
   const clearDrawingGreatCircles = useCallback(() => {
@@ -141,6 +145,7 @@ const SimpleMapLibreMap = forwardRef(({
       if (map.current) {
         // Clear vertex markers
         clearVertexMarkers();
+  originalFeatureCollectionRef.current = null;
         
         // Clear visualization source
         if (map.current.getSource('visualization')) {
@@ -265,12 +270,15 @@ const SimpleMapLibreMap = forwardRef(({
           };
         }
 
-        // Transform geometry to great circle arcs and use as primary visualization
-        const greatCircleCollection = transformGeoJSONToGreatCircle(featureCollection);
-        map.current.getSource('visualization').setData(greatCircleCollection);
+  // Store original feature collection for future vertex marker re-rendering
+  originalFeatureCollectionRef.current = featureCollection;
 
-        // Add vertex markers (use original coordinates, not great circle interpolated ones)
-        addVertexMarkers(featureCollection);
+  // Transform geometry to great circle arcs and use as primary visualization (derived from original)
+  const greatCircleCollection = transformGeoJSONToGreatCircle(featureCollection);
+  map.current.getSource('visualization').setData(greatCircleCollection);
+
+  // Add vertex markers (use original coordinates, not great circle interpolated ones)
+  addVertexMarkers(featureCollection);
 
         // Calculate bounding box and fit the map
         if (featureCollection.features.length > 0) {
@@ -339,6 +347,25 @@ const SimpleMapLibreMap = forwardRef(({
       }
     }
   }), [isMapLoaded, addVertexMarkers, clearDrawingGreatCircles]); // Include all dependencies
+
+  // Effect to clear or redraw vertex markers when toggle changes
+  useEffect(() => {
+    if (!map.current) return;
+    // If turning off, just clear
+    if (!showVertexNumbers) {
+      clearVertexMarkers();
+      return;
+    }
+    // If turning on, re-render markers from current visualization source
+    try {
+      if (originalFeatureCollectionRef.current) {
+        clearVertexMarkers();
+        addVertexMarkers(originalFeatureCollectionRef.current);
+      }
+    } catch (e) {
+      console.error('Failed to refresh vertex markers after toggle change:', e);
+    }
+  }, [showVertexNumbers, addVertexMarkers]);
 
   const updateDrawingGreatCircles = useCallback(() => {
     // Prevent concurrent updates

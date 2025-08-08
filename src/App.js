@@ -31,6 +31,7 @@ function App() {
   const [ewkb, setEwkb] = useState("");
   const [json, setJson] = useState("");
   const [exampleIndex, setExampleIndex] = useState(0);
+  const [showVertexNumbers, setShowVertexNumbers] = useState(true);
 
   const mapRef = useRef();
 
@@ -384,6 +385,7 @@ function App() {
             onDrawStop={handleDrawStop}
             center={[0, 20]}
             zoom={1.5}
+            showVertexNumbers={showVertexNumbers}
           />
         </div>
 
@@ -400,6 +402,15 @@ function App() {
                 <InputGroup.Text id="basic-addon1">EPSG:</InputGroup.Text>
                 <Form.Control value={epsg} onChange={handleEpsgChange} />
               </InputGroup>
+            </Form.Group>
+
+            <Form.Group className="mb-3" controlId="vertexNumbersToggle">
+              <Form.Check
+                type="checkbox"
+                label="Show vertex numbers"
+                checked={showVertexNumbers}
+                onChange={(e) => setShowVertexNumbers(e.target.checked)}
+              />
             </Form.Group>
             
             {error && <Alert variant="danger">{error}</Alert>}
