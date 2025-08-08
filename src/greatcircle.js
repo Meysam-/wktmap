@@ -46,6 +46,15 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
  * @returns {Array} [longitude, latitude] in degrees
  */
 function interpolateGreatCircle(lat1, lon1, lat2, lon2, fraction) {
+  // Normalize the second longitude relative to the first to ensure we take the shortest path
+  // across the antimeridian. Without this, a segment like 170 -> -170 would be treated as a
+  // 340° change instead of a 20° change, producing artifacts when rendered on a projected map.
+  if (lon2 - lon1 > 180) {
+    lon2 -= 360;
+  } else if (lon2 - lon1 < -180) {
+    lon2 += 360;
+  }
+
   const φ1 = toRadians(lat1);
   const λ1 = toRadians(lon1);
   const φ2 = toRadians(lat2);
@@ -73,8 +82,18 @@ function interpolateGreatCircle(lat1, lon1, lat2, lon2, fraction) {
 
   const φ3 = Math.atan2(z, Math.sqrt(x * x + y * y));
   const λ3 = Math.atan2(y, x);
+  let lon3 = toDegrees(λ3);
 
-  return [toDegrees(λ3), toDegrees(φ3)];
+  // Keep longitude continuity with respect to start longitude (avoid wrapping jump back into [-180,180])
+  // so downstream consumers can decide how/when to wrap or split at the dateline.
+  // Adjust by adding/subtracting 360 so that the difference from lon1 is within +/-180.
+  if (lon3 - lon1 > 180) {
+    lon3 -= 360;
+  } else if (lon3 - lon1 < -180) {
+    lon3 += 360;
+  }
+
+  return [lon3, toDegrees(φ3)];
 }
 
 /**
@@ -141,15 +160,32 @@ function transformLineStringToGreatCircle(coordinates) {
     
     const segments = calculateSegments(lat1, lon1, lat2, lon2);
     const arcPoints = generateGreatCircleArc(lat1, lon1, lat2, lon2, segments);
-    
-    // Add all points except the last one (to avoid duplication)
-    for (let j = 0; j < arcPoints.length - 1; j++) {
-      result.push(arcPoints[j]);
+
+    for (let j = 0; j < arcPoints.length - 1; j++) { // exclude last to prevent duplication
+      let [lon, lat] = arcPoints[j];
+      if (result.length) {
+        const prevLon = result[result.length - 1][0];
+        let diff = lon - prevLon;
+        if (diff > 180) {
+          lon -= 360; // unwrap backward across dateline
+        } else if (diff < -180) {
+          lon += 360; // unwrap forward across dateline
+        }
+      }
+      result.push([lon, lat]);
     }
   }
   
   // Add the final point
-  result.push(coordinates[coordinates.length - 1]);
+  const last = coordinates[coordinates.length - 1];
+  let [lastLon, lastLat] = last;
+  if (result.length) {
+    const prevLon = result[result.length - 1][0];
+    let diff = lastLon - prevLon;
+    if (diff > 180) lastLon -= 360;
+    else if (diff < -180) lastLon += 360;
+  }
+  result.push([lastLon, lastLat]);
   
   return result;
 }
@@ -167,27 +203,24 @@ function transformPolygonToGreatCircle(coordinates) {
     }
     
     // Create a LineString from the ring (excluding the duplicate last point)
-    const lineCoords = ring.slice(0, -1);
-    const result = [];
-    
-    // Process each edge of the polygon, including the closing edge
-    for (let i = 0; i < lineCoords.length; i++) {
-      const [lon1, lat1] = lineCoords[i];
-      const [lon2, lat2] = lineCoords[(i + 1) % lineCoords.length]; // Use modulo to wrap around
-      
-      const segments = calculateSegments(lat1, lon1, lat2, lon2);
-      const arcPoints = generateGreatCircleArc(lat1, lon1, lat2, lon2, segments);
-      
-      // Add all points except the last one (to avoid duplication)
-      for (let j = 0; j < arcPoints.length - 1; j++) {
-        result.push(arcPoints[j]);
+    const lineCoords = ring.slice(0, -1); // exclude duplicated last point
+    const gcLine = transformLineStringToGreatCircle(lineCoords);
+    // Ensure closure
+    if (gcLine.length && (gcLine[0][0] !== gcLine[gcLine.length - 1][0] || gcLine[0][1] !== gcLine[gcLine.length - 1][1])) {
+      gcLine.push([...gcLine[0]]);
+    }
+    // Normalize ring longitudes around first longitude for better rendering continuity
+    if (gcLine.length) {
+      const baseLon = gcLine[0][0];
+      for (let i = 1; i < gcLine.length; i++) {
+        let lon = gcLine[i][0];
+        let diff = lon - baseLon;
+        while (diff > 180) { lon -= 360; diff -= 360; }
+        while (diff < -180) { lon += 360; diff += 360; }
+        gcLine[i][0] = lon;
       }
     }
-    
-    // Close the ring by adding the first point as the last point
-    result.push(result[0]);
-    
-    return result;
+    return gcLine;
   });
 }
 
