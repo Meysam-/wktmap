@@ -10,7 +10,8 @@ const SimpleMapLibreMap = forwardRef(({
   onDrawStop,
   center = [0, 10],
   zoom = 1,
-  showVertexNumbers = true
+  showVertexNumbers = true,
+  onVertexClick
 }, ref) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -20,6 +21,8 @@ const SimpleMapLibreMap = forwardRef(({
   const [layersInitialized, setLayersInitialized] = useState(false);
   // Store original (non-great-circle-subdivided) feature collection for vertex markers
   const originalFeatureCollectionRef = useRef(null);
+  // Global vertex counter for consistent indexing across multi-geometries/rings
+  const globalVertexCounterRef = useRef(0);
 
   // Store vertex markers for cleanup
   const vertexMarkers = useRef([]);
@@ -34,7 +37,7 @@ const SimpleMapLibreMap = forwardRef(({
   };
 
   // Function to add a single vertex marker - wrapped in useCallback to prevent dependency changes
-  const addVertexMarker = useCallback((coord, index, color) => {
+  const addVertexMarker = useCallback((coord, localIndex, color) => {
     // Create a DOM element for the marker
     const el = document.createElement('div');
     el.className = 'vertex-marker';
@@ -58,12 +61,22 @@ const SimpleMapLibreMap = forwardRef(({
       user-select: none;
       pointer-events: auto;
     `;
-    el.textContent = index.toString();
+  el.textContent = localIndex.toString();
+  const globalIndex = globalVertexCounterRef.current;
+  el.dataset.globalIndex = globalIndex;
 
     // Add click handler
     el.addEventListener('click', (e) => {
       e.stopPropagation();
-      console.log(`Vertex ${index} clicked at [${coord[0]}, ${coord[1]}]`);
+      if (typeof onVertexClick === 'function') {
+        try {
+          onVertexClick({ coord, index: globalIndex, localIndex });
+        } catch (err) {
+          console.error('onVertexClick handler failed', err);
+        }
+      } else {
+        console.log(`Vertex ${localIndex} (global ${globalIndex}) clicked at [${coord[0]}, ${coord[1]}]`);
+      }
     });
 
     // Create and add marker
@@ -74,8 +87,9 @@ const SimpleMapLibreMap = forwardRef(({
       .setLngLat(coord)
       .addTo(map.current);
 
-    vertexMarkers.current.push(marker);
-  }, []); // Empty dependency array since the function doesn't depend on any reactive values
+  vertexMarkers.current.push(marker);
+  globalVertexCounterRef.current += 1; // increment after adding marker
+  }, [onVertexClick]);
 
   // Function to add vertices for a specific geometry
   const addVerticesForGeometry = useCallback((geometry) => {
@@ -118,6 +132,8 @@ const SimpleMapLibreMap = forwardRef(({
   // Function to add vertex markers with numbered labels
   const addVertexMarkers = useCallback((featureCollection) => {
     if (!showVertexNumbers) return;
+    // reset global counter for this render batch
+    globalVertexCounterRef.current = 0;
     featureCollection.features.forEach(feature => {
       if (feature.geometry) {
         addVerticesForGeometry(feature.geometry);

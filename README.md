@@ -7,8 +7,9 @@ A web application for parsing, visualizing, and sharing Well-Known Text (WKT) ge
 ### 🗺️ WKT Visualization
 - **Multi-format Support**: Parse and display WKT, WKB, EWKB, GeoJSON, and more
 - **Coordinate Systems**: Support for EPSG coordinate reference systems (1024-32767)
-- **Interactive Maps**: Built with Leaflet.js for smooth map interactions
+ - **Interactive Maps**: Built with MapLibre GL JS for smooth, globe-capable map interactions
 - **Vertex Visualization**: Automatically displays polygon and line vertices as colored markers
+ - **Vertex Click Highlighting**: Click any numbered vertex marker to highlight the matching coordinate pair in the WKT textarea for faster debugging
 - **Multiple Base Layers**: OpenStreetMap, Humanitarian, Esri World Imagery, OpenSeaMap
 
 ### 📐 Drawing Tools
@@ -57,6 +58,22 @@ When geometries are displayed, vertices are shown as colored markers with zero-i
 - **Blue**: LineString vertices (numbered 0, 1, 2, ...)
 
 Each vertex displays its index number starting from 0, making it easy to identify specific coordinates in the WKT geometry definition.
+
+#### 🔍 Vertex Click → WKT Coordinate Highlight
+With "Show vertex numbers" enabled, clicking any vertex marker will:
+1. Focus the WKT textarea
+2. Select (highlight) the exact coordinate pair corresponding to that vertex
+
+This works for:
+- Single and multi-part geometries (e.g. `GEOMETRYCOLLECTION`, `MULTILINESTRING`, `MULTIPOLYGON`)
+- Exterior vs interior rings (holes) – hole vertices highlight their own ring, not the exterior
+- Mixed geometry collections (lines + polygons)
+
+Matching is done by coordinate value (with tolerance), so repeated coordinates (e.g. ring closure) intentionally highlight the first occurrence of that literal pair.
+
+If multiple distinct geometries share identical coordinate pairs, the first textual occurrence in the WKT is highlighted (a future enhancement could cycle through matches).
+
+Disable the behavior anytime by unchecking "Show vertex numbers".
 
 ### Format Conversion Examples
 

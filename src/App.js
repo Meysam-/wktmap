@@ -1,6 +1,6 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Navbar, Container, Button, Form, Alert, InputGroup, Dropdown } from "react-bootstrap";
-import { React, useState, useEffect, useRef } from "react";
+import { React, useState, useEffect, useRef, useCallback } from "react";
 import examples from "./examples";
 import { Twitter } from "react-bootstrap-icons";
 import CRC32 from "crc-32";
@@ -34,6 +34,55 @@ function App() {
   const [showVertexNumbers, setShowVertexNumbers] = useState(true);
 
   const mapRef = useRef();
+  const wktTextareaRef = useRef(null);
+  // Cache of parsed coordinate string ranges for current WKT (array of {index,start,end})
+  const coordinateRangesRef = useRef([]);
+
+  // Parse WKT polygon/linestring coordinates to map vertex index -> character range
+  const parseCoordinateRanges = useCallback((wktString) => {
+    coordinateRangesRef.current = [];
+    if (!wktString) return;
+    // Capture coordinate pairs (assumes 2D coords in current representation)
+    const re = /([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)[\s]+([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/g;
+    let match;
+    let idx = 0;
+    while ((match = re.exec(wktString)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      const lon = parseFloat(match[1]);
+      const lat = parseFloat(match[2]);
+      coordinateRangesRef.current.push({ index: idx, start, end, text: match[0], lon, lat });
+      idx += 1;
+    }
+  }, []);
+
+  // Re-parse coordinate ranges whenever WKT changes
+  useEffect(() => {
+    parseCoordinateRanges(wkt);
+  }, [wkt, parseCoordinateRanges]);
+
+  // Handle vertex click from map: highlight corresponding coordinate occurrence in textarea
+  const handleVertexClick = useCallback(({ coord, index }) => {
+    if (!wktTextareaRef.current) return;
+    let range;
+    if (coord && coord.length >= 2) {
+      const [lon, lat] = coord;
+      const EPS = 1e-9;
+      range = coordinateRangesRef.current.find(r => Math.abs(r.lon - lon) < EPS && Math.abs(r.lat - lat) < EPS);
+    }
+    // Fallback to index if value match failed
+    if (!range) {
+      range = coordinateRangesRef.current.find(r => r.index === index);
+    }
+    if (!range) return;
+    try {
+      const ta = wktTextareaRef.current;
+      ta.focus();
+      ta.setSelectionRange(range.start, range.end);
+    } catch (e) {
+      console.error('Failed to highlight coordinate', e);
+    }
+  }, []);
 
   useEffect(() => {
     if (!map) return; // Only run when map is ready
@@ -386,6 +435,7 @@ function App() {
             center={[0, 20]}
             zoom={1.5}
             showVertexNumbers={showVertexNumbers}
+            onVertexClick={handleVertexClick}
           />
         </div>
 
@@ -393,7 +443,7 @@ function App() {
           <Container fluid className="p-3 h-100">
             <Form.Group className="mb-3" controlId="wkt">
               <Form.Label>WKT</Form.Label>
-              <Form.Control className="font-monospace" as="textarea" rows={12} value={wkt} onChange={handleWktChange} />
+              <Form.Control ref={wktTextareaRef} className="font-monospace" as="textarea" rows={12} value={wkt} onChange={handleWktChange} />
             </Form.Group>
             
             <Form.Group className="mb-3" controlId="epsg">
