@@ -686,8 +686,7 @@ const SimpleMapLibreMap = forwardRef(({
 
     try {
       // Create a simple map style using OpenStreetMap tiles with globe support
-    const darkBg = '#0f1419';
-    const darkFogColor = '#0b0f13';
+  const darkFogColor = '#0b0f13';
     const mapStyle = {
         version: 8,
         name: 'OpenStreetMap Globe',
@@ -711,7 +710,7 @@ const SimpleMapLibreMap = forwardRef(({
         ],
         fog: {
       'range': [0.8, 8],
-      'color': darkMode ? darkFogColor : '#ffffff',
+          'color': '#ffffff',
       'horizon-blend': 0.5
         }
       };
@@ -874,7 +873,20 @@ const SimpleMapLibreMap = forwardRef(({
         setLayersInitialized(false);
       }
     };
-  }, [darkMode]); // re-create only if darkMode first mount difference (will be ignored after init)
+  }, []); // do not recreate map on darkMode toggle
+
+  // Update fog color on theme change without reloading map
+  useEffect(() => {
+    if (map.current && map.current.setFog) {
+      try {
+        map.current.setFog({
+          'range': [0.8,8],
+          'color': darkMode ? '#0b0f13' : '#ffffff',
+          'horizon-blend': 0.5
+        });
+      } catch(_) {}
+    }
+  }, [darkMode]);
 
   // Apply dark filter to raster tiles when darkMode toggles (post-initialization)
   useEffect(() => {

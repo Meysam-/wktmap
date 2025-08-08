@@ -48,6 +48,7 @@ function App() {
   const wktTextareaRef = useRef(null);
   // Cache of parsed coordinate string ranges for current WKT (array of {index,start,end})
   const coordinateRangesRef = useRef([]);
+  const previousWktRef = useRef("");
 
   // Parse WKT polygon/linestring coordinates to map vertex index -> character range
   const parseCoordinateRanges = useCallback((wktString) => {
@@ -127,6 +128,7 @@ function App() {
   async function handleDrawStop() {
     const wktDraw = drawFeaturesToWkt(mapRef.current?.getDraw());
     clearHash();
+  setHighlightRange(null); // reset highlight when new drawing applied
     if (wktDraw) {
       let existingWktIn4326 = wkt;
       
@@ -270,6 +272,7 @@ function App() {
 
   function loadExample() {
     clearHash();
+  setHighlightRange(null); // reset highlight when loading new example
     const example = examples[exampleIndex];
     setWkt(example[0]);
     setEpsg(example[1]);
@@ -290,7 +293,11 @@ function App() {
         setError(error.message);
       }
     }
+    if (previousWktRef.current !== input.wkt) {
+      setHighlightRange(null);
+    }
     setWkt(input.wkt);
+    previousWktRef.current = input.wkt;
     setEpsg(input.epsg);
     setWkb(input.wkb);
     setEwkb(input.ewkb);
@@ -557,7 +564,7 @@ function App() {
               {error && <Alert variant="danger" className="py-1 small mb-2">{error}</Alert>}
 
               <Tabs activeKey={activeFormatTab} onSelect={(k)=> setActiveFormatTab(k || 'wkt')} justify className="mb-2 modern-tabs">
-                <Tab eventKey="wkt" title={<span>WKT <Badge bg="secondary" pill>{metrics.vertices}</Badge></span>}>
+                <Tab eventKey="wkt" title={<span>WKT</span>}>
                   <div
                     ref={wktTextareaRef}
                     className="font-monospace mt-2 code-input wkt-editor"
