@@ -59,10 +59,17 @@ textarea {
 .code-input, .code-output {
   background: #ffffff;
   border: 1px solid #d0d7de;
-  border-radius: 6px;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 14px -6px rgba(0,0,0,0.09);
   font-size: 0.75rem !important;
   line-height: 1.2;
+  transition: box-shadow .18s, border-color .18s;
+}
+
+.code-input:focus, .code-output:focus, .wkt-editor:focus {
+  outline: none;
+  border-color: #9bbcf5;
+  box-shadow: 0 0 0 2px rgba(13,110,253,0.15), 0 2px 6px rgba(0,0,0,0.12);
 }
 
 /* Custom text selection highlight */
@@ -80,7 +87,7 @@ textarea::selection {
 .modern-tabs .tab-pane { display: flex; flex-direction: column; height: 100%; }
 .modern-tabs .tab-pane .code-input { flex: 1 1 auto; height: 100%; resize: none; }
 
-.wkt-editor { outline: none; white-space: pre-wrap; overflow-y: auto; min-height: 300px; padding: 10px 14px; border: 1px solid transparent; }
+.wkt-editor { outline: none; white-space: pre-wrap; overflow-y: auto; min-height: 300px; padding: 10px 14px; border: 1px solid #d0d7de; background:#ffffff; border-radius:8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 14px -6px rgba(0,0,0,0.09); }
 .wkt-editor span.coord-highlight {
   background: #f4d451;
   color: #1a1d21;
@@ -107,12 +114,20 @@ textarea::selection {
 }
 
 /* Left panel flex adjustments */
-#controls-container .flex-grow-1 { min-height: 0; }
+/* #controls-container .flex-grow-1 { min-height: 0; } */
 
 #app.dark-theme .code-input, #app.dark-theme .code-output {
   background: #20262d;
   color: #e2e8f0;
   border-color: #2d3945;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 14px -8px rgba(0,0,0,0.7);
+}
+
+#app.dark-theme .wkt-editor { background:#20262d; border-color:#2d3945; box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 14px -8px rgba(0,0,0,0.7); }
+
+#app.dark-theme .code-input:focus, #app.dark-theme .code-output:focus, #app.dark-theme .wkt-editor:focus {
+  border-color: #4dabf7;
+  box-shadow: 0 0 0 2px rgba(77,171,247,0.2), 0 2px 8px rgba(0,0,0,0.6);
 }
 
 .action-bar {
@@ -166,13 +181,13 @@ textarea::selection {
   border-radius: 0 8px 8px 8px;
   background: #ffffff;
   padding: 0.3rem 0.6rem 0.6rem 0.6rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 14px -6px rgba(0,0,0,0.08);
 }
 
 #app.dark-theme .modern-tabs .tab-content {
   background: #20262d;
   border-color: #2d3945;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 14px -8px rgba(0,0,0,0.7);
 }
 
 .metrics-panel {

@@ -1,5 +1,5 @@
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Navbar, Container, Button, Form, Alert, InputGroup, Dropdown, Tabs, Tab, Badge, ButtonGroup, ToggleButton } from "react-bootstrap";
+import { Navbar, Container, Button, Form, Alert, InputGroup, Tabs, Tab, ButtonGroup } from "react-bootstrap";
 import { React, useState, useEffect, useRef, useCallback } from "react";
 import examples from "./examples";
 import { Twitter } from "react-bootstrap-icons";
@@ -92,7 +92,7 @@ function App() {
         if (span && span.scrollIntoView) span.scrollIntoView({ block: 'nearest' });
       }
     });
-  }, [wkt]);
+  }, []); // wkt not directly referenced; ranges ref updates via effect
 
   useEffect(() => {
     if (!map) return; // Only run when map is ready
@@ -227,15 +227,7 @@ function App() {
       .replace(/>/g, '&gt;');
   }
 
-  function handleWktChange(e) {
-    clearHash();
-    const wkt = trimWkt(e.target.value)
-    setWkt(wkt);
-    processInput({
-      wkt: wkt,
-      epsg: epsg
-    });
-  }
+  // Removed unused handleWktChange (direct contentEditable onInput now handles updates)
 
   function handleEpsgChange(e) {
     clearHash();
