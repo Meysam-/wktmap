@@ -875,14 +875,6 @@ const SimpleMapLibreMap = forwardRef(({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - map should only be initialized once
 
-  // Update map center and zoom when props change (after map is loaded)
-  useEffect(() => {
-    if (map.current && isMapLoaded) {
-      map.current.setCenter(center);
-      map.current.setZoom(zoom);
-    }
-  }, [center, zoom, isMapLoaded]);
-
   // Update fog color on theme change without reloading map
   useEffect(() => {
     if (map.current && map.current.setFog) {
