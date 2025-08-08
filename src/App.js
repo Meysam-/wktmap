@@ -1,5 +1,5 @@
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Navbar, Container, Button, Form, Alert, InputGroup, Dropdown } from "react-bootstrap";
+import { Navbar, Container, Button, Form, Alert, InputGroup, Dropdown, Tabs, Tab, Badge, ButtonGroup, ToggleButton } from "react-bootstrap";
 import { React, useState, useEffect, useRef, useCallback } from "react";
 import examples from "./examples";
 import { Twitter } from "react-bootstrap-icons";
@@ -32,6 +32,17 @@ function App() {
   const [json, setJson] = useState("");
   const [exampleIndex, setExampleIndex] = useState(0);
   const [showVertexNumbers, setShowVertexNumbers] = useState(true);
+  const [activeFormatTab, setActiveFormatTab] = useState('wkt');
+  const [darkMode, setDarkMode] = useState(false);
+  const [highlightRange, setHighlightRange] = useState(null); // {start,end}
+
+  const [metrics, setMetrics] = useState({
+    type: '',
+    vertices: 0,
+    bbox: '',
+    area: null,
+    length: null
+  });
 
   const mapRef = useRef();
   const wktTextareaRef = useRef(null);
@@ -63,26 +74,24 @@ function App() {
 
   // Handle vertex click from map: highlight corresponding coordinate occurrence in textarea
   const handleVertexClick = useCallback(({ coord, index }) => {
-    if (!wktTextareaRef.current) return;
     let range;
     if (coord && coord.length >= 2) {
       const [lon, lat] = coord;
       const EPS = 1e-9;
       range = coordinateRangesRef.current.find(r => Math.abs(r.lon - lon) < EPS && Math.abs(r.lat - lat) < EPS);
     }
-    // Fallback to index if value match failed
-    if (!range) {
-      range = coordinateRangesRef.current.find(r => r.index === index);
-    }
+    if (!range) range = coordinateRangesRef.current.find(r => r.index === index);
     if (!range) return;
-    try {
-      const ta = wktTextareaRef.current;
-      ta.focus();
-      ta.setSelectionRange(range.start, range.end);
-    } catch (e) {
-      console.error('Failed to highlight coordinate', e);
-    }
-  }, []);
+  // Use exact coordinate range (no boundary padding) per user request
+  setHighlightRange({ start: range.start, end: range.end });
+    requestAnimationFrame(()=>{
+      if (wktTextareaRef.current) {
+        wktTextareaRef.current.focus();
+        const span = wktTextareaRef.current.querySelector('span.coord-highlight');
+        if (span && span.scrollIntoView) span.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }, [wkt]);
 
   useEffect(() => {
     if (!map) return; // Only run when map is ready
@@ -177,22 +186,16 @@ function App() {
   }
 
   function handleCopy(format) {
-    if (!error) {
-      let text = "";
-      if (format === "wkt") {
-        text = wkt;
-      } else if (format === "wkb") {
-        text = wkb;
-      } else if (format === "ewkb") {
-        text = ewkb;
-      } else if (format === "geojson") {
-        text = json;
-      } else if (format === "bbox") {
-        text = getBbox(wkt);
-      }
-      navigator.clipboard.writeText(text);
-      toast("Copied geometry as " + formats[format], { icon: "📎" })
-    }
+    if (error) return;
+    let text = "";
+    if (format === "wkt") text = wkt;
+    else if (format === "wkb") text = wkb;
+    else if (format === "ewkb") text = ewkb;
+    else if (format === "geojson") text = json;
+    else if (format === "bbox") text = getBbox(wkt);
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    toast(`Copied ${formats[format]} to clipboard`, { icon: "📎" });
   }
 
   function handleWktClear() {
@@ -213,6 +216,13 @@ function App() {
 
   function trimWkt(wkt) {
     return wkt.replace(/\s+/g, " ").trim();
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   function handleWktChange(e) {
@@ -288,6 +298,8 @@ function App() {
     if (doVisualize) {
       visualize(input);
     }
+    // Update metrics
+    computeMetrics(input);
   }
 
   function clearHash() {
@@ -303,6 +315,73 @@ function App() {
       
       // Check winding order and show warnings
       checkAndWarnWindingOrder(spatial.json);
+    }
+  }
+
+  // Great-circle distance (haversine) helper (meters)
+  function gcDistance(a, b) {
+    const R = 6371008.8; // mean Earth radius metres
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b[1]-a[1]);
+    const dLon = toRad(b[0]-a[0]);
+    const lat1 = toRad(a[1]);
+    const lat2 = toRad(b[1]);
+    const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+
+  function computeLength(geometry) {
+    let len = 0;
+    function addLine(coords) {
+      for (let i=1;i<coords.length;i++) {
+        len += gcDistance(coords[i-1], coords[i]);
+      }
+    }
+    if (geometry.type === 'LineString') addLine(geometry.coordinates);
+    else if (geometry.type === 'MultiLineString') geometry.coordinates.forEach(addLine);
+    else if (geometry.type === 'Polygon') geometry.coordinates.forEach(addLine);
+    else if (geometry.type === 'MultiPolygon') geometry.coordinates.forEach(p => p.forEach(addLine));
+    else if (geometry.type === 'GeometryCollection') geometry.geometries.forEach(g=> len += computeLength(g));
+    return len;
+  }
+
+  function computeArea(geometry) {
+    // Uses existing calculateSphericalSignedArea for each ring
+    let area = 0;
+    function polygonArea(coords) {
+      if (!coords.length) return;
+      // exterior
+      area += Math.abs(calculateSphericalSignedArea(coords[0]));
+      // subtract holes
+      for (let i=1;i<coords.length;i++) {
+        area -= Math.abs(calculateSphericalSignedArea(coords[i]));
+      }
+    }
+    if (geometry.type === 'Polygon') polygonArea(geometry.coordinates);
+    else if (geometry.type === 'MultiPolygon') geometry.coordinates.forEach(polygonArea);
+    else if (geometry.type === 'GeometryCollection') geometry.geometries.forEach(g=> area += computeArea(g));
+    return area; // square meters approximately
+  }
+
+  function computeMetrics(input) {
+    try {
+      const bboxVal = input.wkt ? getBbox(input.wkt) : '';
+      const geo = input.json?.type ? (input.json.type === 'Feature' ? input.json.geometry : (input.json.type === 'FeatureCollection' ? { type: 'GeometryCollection', geometries: input.json.features.map(f=>f.geometry) } : input.json)) : null;
+      let area = null;
+      let length = null;
+      if (geo) {
+        area = computeArea(geo);
+        length = computeLength(geo);
+      }
+      setMetrics({
+        type: geo ? geo.type : '',
+        vertices: coordinateRangesRef.current.length,
+        bbox: bboxVal,
+        area: area && area > 0 ? area : null,
+        length: length && length > 0 ? length : null
+      });
+    } catch (e) {
+      // Silent fail - metrics are auxiliary
     }
   }
 
@@ -414,15 +493,24 @@ function App() {
   }
 
   return (
-    <div id="app">
+  <div id="app" className={darkMode ? 'dark-theme' : ''}>
 
       <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
 
-      <Navbar bg="light" expand="lg">
+      <Navbar bg={darkMode ? 'dark' : 'light'} variant={darkMode ? 'dark' : 'light'} expand="lg" className="shadow-sm" sticky="top">
         <Container fluid>
-          <Navbar.Brand href="/">
-            Well-known Text (WKT) visualization
+          <Navbar.Brand href="/" className="fw-semibold d-flex align-items-center gap-2">
+            <span className="brand-accent" /> WKT Visualization
           </Navbar.Brand>
+          <div className="d-flex align-items-center gap-3">
+            <Form.Check
+              type="switch"
+              id="theme-toggle"
+              label={darkMode ? 'Dark' : 'Light'}
+              checked={darkMode}
+              onChange={()=>setDarkMode(!darkMode)}
+            />
+          </div>
         </Container>
       </Navbar>
 
@@ -436,57 +524,110 @@ function App() {
             zoom={1.5}
             showVertexNumbers={showVertexNumbers}
             onVertexClick={handleVertexClick}
+            darkMode={darkMode}
           />
         </div>
 
         <div id="controls-container">
-          <Container fluid className="p-3 h-100">
-            <Form.Group className="mb-3" controlId="wkt">
-              <Form.Label>WKT</Form.Label>
-              <Form.Control ref={wktTextareaRef} className="font-monospace" as="textarea" rows={12} value={wkt} onChange={handleWktChange} />
-            </Form.Group>
-            
-            <Form.Group className="mb-3" controlId="epsg">
-              <Form.Label>EPSG</Form.Label>
-              <InputGroup>
-                <InputGroup.Text id="basic-addon1">EPSG:</InputGroup.Text>
-                <Form.Control value={epsg} onChange={handleEpsgChange} />
-              </InputGroup>
-            </Form.Group>
+          <Container fluid className="p-3 h-100 d-flex flex-column">
+            <div className="d-flex flex-column flex-grow-1 overflow-auto">
+              <div className="mb-3 action-bar">
+                <ButtonGroup className="w-100 mb-2">
+                  <Button variant="outline-primary" onClick={loadExample} size="sm">Example</Button>
+                  <Button variant="outline-success" onClick={handleShare} size="sm">Share</Button>
+                </ButtonGroup>
+                <div className="d-flex gap-2 flex-wrap small">
+                  <Form.Group controlId="epsg" className="flex-grow-1">
+                    <InputGroup size="sm">
+                      <InputGroup.Text>EPSG</InputGroup.Text>
+                      <Form.Control value={epsg} onChange={handleEpsgChange} />
+                    </InputGroup>
+                  </Form.Group>
+                  <Form.Group controlId="vertexNumbersToggle" className="d-flex align-items-center">
+                    <Form.Check
+                      type="switch"
+                      label="Vertices"
+                      checked={showVertexNumbers}
+                      onChange={(e) => setShowVertexNumbers(e.target.checked)}
+                    />
+                  </Form.Group>
+                </div>
+              </div>
 
-            <Form.Group className="mb-3" controlId="vertexNumbersToggle">
-              <Form.Check
-                type="checkbox"
-                label="Show vertex numbers"
-                checked={showVertexNumbers}
-                onChange={(e) => setShowVertexNumbers(e.target.checked)}
-              />
-            </Form.Group>
-            
-            {error && <Alert variant="danger">{error}</Alert>}
-            
-            <div className="d-grid gap-2 mb-3">
-              <Button variant="light" onClick={loadExample}>Load example</Button>
-              <Button variant="warning" onClick={handleWktClear}>Clear</Button>
-              <Dropdown>
-                <Dropdown.Toggle variant="light" className="w-100">Copy as</Dropdown.Toggle>
-                <Dropdown.Menu className="w-100">
-                  {
-                    Object.keys(formats).map(format => <Dropdown.Item key={format} disabled={error || !json} onClick={() => handleCopy(format)}>{formats[format]}</Dropdown.Item>)
-                  }
-                </Dropdown.Menu>
-              </Dropdown>
-              <Button variant="success" onClick={handleShare}>Share</Button>
+              {error && <Alert variant="danger" className="py-1 small mb-2">{error}</Alert>}
+
+              <Tabs activeKey={activeFormatTab} onSelect={(k)=> setActiveFormatTab(k || 'wkt')} justify className="mb-2 modern-tabs">
+                <Tab eventKey="wkt" title={<span>WKT <Badge bg="secondary" pill>{metrics.vertices}</Badge></span>}>
+                  <div
+                    ref={wktTextareaRef}
+                    className="font-monospace mt-2 code-input wkt-editor"
+                    contentEditable
+                    suppressContentEditableWarning
+                    role="textbox"
+                    aria-label="WKT editor"
+                    spellCheck={false}
+                    onInput={(e)=>{
+                      clearHash();
+                      const text = trimWkt(e.currentTarget.innerText);
+                      setHighlightRange(null);
+                      setWkt(text);
+                      processInput({ wkt: text, epsg });
+                    }}
+                    onClick={(e)=>{
+                      const t = e.target;
+                      if (t.classList && t.classList.contains('coord-highlight')) {
+                        const txt = t.textContent.trim();
+                        if (txt) {
+                          navigator.clipboard.writeText(txt);
+                          toast(`Copied coordinate ${txt}`, { icon: '📍' });
+                        }
+                      }
+                    }}
+                    onMouseOver={(e)=>{ const t=e.target; if (t.classList && t.classList.contains('coord-highlight')) t.classList.add('hover'); }}
+                    onMouseOut={(e)=>{ const t=e.target; if (t.classList && t.classList.contains('coord-highlight')) t.classList.remove('hover'); }}
+                    dangerouslySetInnerHTML={{ __html: (() => {
+                      if (!wkt) return '';
+                      if (!highlightRange) return escapeHtml(wkt);
+                      const { start, end } = highlightRange;
+                      return escapeHtml(wkt.slice(0,start)) + '<span class="coord-highlight" title="Click to copy coordinate">' + escapeHtml(wkt.slice(start,end)) + '</span>' + escapeHtml(wkt.slice(end));
+                    })() }}
+                  />
+                  <div className="d-flex justify-content-end mt-2 gap-2">
+                    <Button size="sm" variant="danger" onClick={handleWktClear} disabled={!wkt}>Clear</Button>
+                    <Button size="sm" variant="outline-primary" onClick={()=>handleCopy('wkt')} disabled={!!error || !wkt}>Copy</Button>
+                  </div>
+                </Tab>
+                <Tab eventKey="geojson" title="GeoJSON" disabled={!json}>
+                  <Form.Control className="font-monospace mt-2 code-output" as="textarea" rows={10} value={json||''} readOnly />
+                  <div className="d-flex justify-content-end mt-2"><Button size="sm" variant="outline-primary" onClick={()=>handleCopy('geojson')} disabled={!json}>Copy</Button></div>
+                </Tab>
+                <Tab eventKey="wkb" title="WKB" disabled={!wkb}>
+                  <Form.Control className="font-monospace mt-2 code-output" as="textarea" rows={6} value={wkb||''} readOnly />
+                  <div className="d-flex justify-content-end mt-2"><Button size="sm" variant="outline-primary" onClick={()=>handleCopy('wkb')} disabled={!wkb}>Copy</Button></div>
+                </Tab>
+                <Tab eventKey="ewkb" title="EWKB" disabled={!ewkb}>
+                  <Form.Control className="font-monospace mt-2 code-output" as="textarea" rows={6} value={ewkb||''} readOnly />
+                  <div className="d-flex justify-content-end mt-2"><Button size="sm" variant="outline-primary" onClick={()=>handleCopy('ewkb')} disabled={!ewkb}>Copy</Button></div>
+                </Tab>
+                <Tab eventKey="bbox" title="BBOX" disabled={!metrics.bbox}>
+                  <Form.Control className="font-monospace mt-2 code-output" as="textarea" rows={3} value={metrics.bbox} readOnly />
+                  <div className="d-flex justify-content-end mt-2"><Button size="sm" variant="outline-primary" onClick={()=>handleCopy('bbox')} disabled={!metrics.bbox}>Copy</Button></div>
+                </Tab>
+              </Tabs>
+
+              {/* Metrics panel removed per request */}
             </div>
+
+            <div className="mt-3 small text-muted text-center opacity-75" />
           </Container>
         </div>
       </div>
 
-      <footer className="footer mt-auto pt-3 pb-3 bg-light">
+      <footer className={`footer mt-auto pt-3 pb-3 ${darkMode ? 'bg-dark text-light' : 'bg-light'}`}>
         <Container fluid>
-          <p className="text-muted small">This page parses, visualizes, and shares <a href="https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry" rel="noreferrer" className="text-muted" target="_blank">WKT</a> (ISO 13249) as well as <a href="https://opengeospatial.github.io/ogc-geosparql/geosparql11/spec.html#_rdfs_datatype_geowktliteral" target="blank" rel="noreferrer" className="text-muted">geo:wktLiteral</a> strings in a variety of coordinate reference systems. Built with <a href="https://openlayers.org/" target="blank" rel="noreferrer" className="text-muted">OpenLayers</a>, <a href="https://maplibre.org/" target="blank" rel="noreferrer" className="text-muted">MapLibre GL JS</a>, <a href="https://trac.osgeo.org/proj4js" target="blank" rel="noreferrer" className="text-muted">Proj4js</a>, <a href="https://github.com/terraformer-js/terraformer" target="blank" rel="noreferrer" className="text-muted">terraformer</a>, and <a href="https://epsg.io/" target="blank" rel="noreferrer" className="text-muted">epsg.io</a>. Use the drawing tools to create your own geometries. Copy as Well-known Binary (WKB) or Extended Well-known Binary (EWKB). Also supports <a href="https://h3geo.org/" rel="noreferrer" className="text-muted" target="_blank">Uber H3</a>, <a href="https://en.wikipedia.org/wiki/Geohash" rel="noreferrer" className="text-muted" target="_blank">Geohash</a>, <a href="https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system" rel="noreferrer" className="text-muted" target="_blank">Quadkey</a>, WKB, and WFS BBOX conversion to WKT.</p>
+          <p className="text-muted small mb-1">This page parses, visualizes, and shares <a href="https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry" rel="noreferrer" className="text-reset" target="_blank">WKT</a> (ISO 13249) & <a href="https://opengeospatial.github.io/ogc-geosparql/geosparql11/spec.html#_rdfs_datatype_geowktliteral" target="blank" rel="noreferrer" className="text-reset">geo:wktLiteral</a>. Built with <a href="https://openlayers.org/" target="blank" rel="noreferrer" className="text-reset">OpenLayers</a>, <a href="https://maplibre.org/" target="blank" rel="noreferrer" className="text-reset">MapLibre GL JS</a>, <a href="https://trac.osgeo.org/proj4js" target="blank" rel="noreferrer" className="text-reset">Proj4js</a>, <a href="https://github.com/terraformer-js/terraformer" target="blank" rel="noreferrer" className="text-reset">terraformer</a>, <a href="https://epsg.io/" target="blank" rel="noreferrer" className="text-reset">epsg.io</a>.</p>
           <p className="text-muted small">
-            Originally created by <Twitter className="mb-1" /> <a rel="noreferrer" className="text-muted" href="https://twitter.com/PieterPrvst" target="_blank">PieterPrvst</a>, forked and further developed by <a rel="noreferrer" className="text-muted" href="https://github.com/meysam-" target="_blank">meysam-</a>
+            Originally created by <Twitter className="mb-1" /> <a rel="noreferrer" className="text-reset" href="https://twitter.com/PieterPrvst" target="_blank">PieterPrvst</a>, further developed by <a rel="noreferrer" className="text-reset" href="https://github.com/meysam-" target="_blank">meysam-</a>
           </p>
         </Container>
       </footer>

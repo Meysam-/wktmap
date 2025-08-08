@@ -11,7 +11,8 @@ const SimpleMapLibreMap = forwardRef(({
   center = [0, 10],
   zoom = 1,
   showVertexNumbers = true,
-  onVertexClick
+  onVertexClick,
+  darkMode = false
 }, ref) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -685,7 +686,9 @@ const SimpleMapLibreMap = forwardRef(({
 
     try {
       // Create a simple map style using OpenStreetMap tiles with globe support
-      const mapStyle = {
+    const darkBg = '#0f1419';
+    const darkFogColor = '#0b0f13';
+    const mapStyle = {
         version: 8,
         name: 'OpenStreetMap Globe',
         projection: {
@@ -707,9 +710,9 @@ const SimpleMapLibreMap = forwardRef(({
           }
         ],
         fog: {
-          'range': [0.8, 8],
-          'color': '#ffffff',
-          'horizon-blend': 0.5
+      'range': [0.8, 8],
+      'color': darkMode ? darkFogColor : '#ffffff',
+      'horizon-blend': 0.5
         }
       };
 
@@ -871,7 +874,20 @@ const SimpleMapLibreMap = forwardRef(({
         setLayersInitialized(false);
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [darkMode]); // re-create only if darkMode first mount difference (will be ignored after init)
+
+  // Apply dark filter to raster tiles when darkMode toggles (post-initialization)
+  useEffect(() => {
+    if (!map.current) return;
+    const canvasContainer = map.current.getContainer();
+    if (!canvasContainer) return;
+    // MapLibre raster tiles have class maplibregl-canvas or are within container; apply filter to container
+    if (darkMode) {
+      canvasContainer.classList.add('dark-map-filters');
+    } else {
+      canvasContainer.classList.remove('dark-map-filters');
+    }
+  }, [darkMode]);
   // Empty dependency array intentional - map should only initialize once
 
   return (
@@ -882,6 +898,15 @@ const SimpleMapLibreMap = forwardRef(({
           top: 20px !important;
           right: 20px !important;
         }
+        ${darkMode ? `
+        .maplibregl-map { background: #0f1419 !important; }
+        .maplibregl-ctrl-group { background: #1e262e !important; }
+        .maplibregl-ctrl-zoom-in,
+        .maplibregl-ctrl-zoom-out,
+        .maplibregl-ctrl-compass { background:#1e262e !important; color:#d0d7de !important; }
+        .mapbox-gl-draw_ctrl-draw-btn { background:#1e262e !important; border-color:#34404a !important; }
+        .mapbox-gl-draw_ctrl-draw-btn:hover { border-color:#4dabf7 !important; }
+        `: ''}
         
         .mapbox-gl-draw_ctrl-draw-btn {
           background-color: #ffffff !important;
@@ -997,13 +1022,19 @@ const SimpleMapLibreMap = forwardRef(({
         .vertex-marker {
           z-index: 1000 !important;
         }
+        .dark-map-filters canvas {
+          filter: brightness(0.75) saturate(0.6) hue-rotate(180deg) invert(0.92) contrast(0.95);
+        }
+        .dark-map-filters .maplibregl-canvas-container {
+          background:#0f1419 !important;
+        }
       `}</style>
       <div
         ref={mapContainer}
         style={{
           width: '100%',
           height: '100%',
-          border: '1px solid #ccc'
+          border: '1px solid ' + (darkMode ? '#2d3945' : '#ccc')
         }}
       />
       {mapError && (
