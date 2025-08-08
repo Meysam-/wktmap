@@ -557,43 +557,45 @@ function App() {
 
               <Tabs activeKey={activeFormatTab} onSelect={(k)=> setActiveFormatTab(k || 'wkt')} justify className="mb-2 modern-tabs">
                 <Tab eventKey="wkt" title={<span>WKT</span>}>
-                  <div
-                    ref={wktTextareaRef}
-                    className="font-monospace mt-2 code-input wkt-editor"
-                    contentEditable
-                    suppressContentEditableWarning
-                    role="textbox"
-                    aria-label="WKT editor"
-                    spellCheck={false}
-                    onInput={(e)=>{
-                      clearHash();
-                      const text = trimWkt(e.currentTarget.innerText);
-                      setHighlightRange(null);
-                      setWkt(text);
-                      processInput({ wkt: text, epsg });
-                    }}
-                    onClick={(e)=>{
-                      const t = e.target;
-                      if (t.classList && t.classList.contains('coord-highlight')) {
-                        const txt = t.textContent.trim();
-                        if (txt) {
-                          navigator.clipboard.writeText(txt);
-                          toast(`Copied coordinate ${txt}`, { icon: '📍' });
+                  <div className="wkt-editor-wrapper mt-2">
+                    <div
+                      ref={wktTextareaRef}
+                      className="font-monospace code-input wkt-editor"
+                      contentEditable
+                      suppressContentEditableWarning
+                      role="textbox"
+                      aria-label="WKT editor"
+                      spellCheck={false}
+                      onInput={(e)=>{
+                        clearHash();
+                        const text = trimWkt(e.currentTarget.innerText);
+                        setHighlightRange(null);
+                        setWkt(text);
+                        processInput({ wkt: text, epsg });
+                      }}
+                      onClick={(e)=>{
+                        const t = e.target;
+                        if (t.classList && t.classList.contains('coord-highlight')) {
+                          const txt = t.textContent.trim();
+                          if (txt) {
+                            navigator.clipboard.writeText(txt);
+                            toast(`Copied coordinate ${txt}`, { icon: '📍' });
+                          }
                         }
-                      }
-                    }}
-                    onMouseOver={(e)=>{ const t=e.target; if (t.classList && t.classList.contains('coord-highlight')) t.classList.add('hover'); }}
-                    onMouseOut={(e)=>{ const t=e.target; if (t.classList && t.classList.contains('coord-highlight')) t.classList.remove('hover'); }}
-                    dangerouslySetInnerHTML={{ __html: (() => {
-                      if (!wkt) return '';
-                      if (!highlightRange) return escapeHtml(wkt);
-                      const { start, end } = highlightRange;
-                      return escapeHtml(wkt.slice(0,start)) + '<span class="coord-highlight" title="Click to copy coordinate">' + escapeHtml(wkt.slice(start,end)) + '</span>' + escapeHtml(wkt.slice(end));
-                    })() }}
-                  />
+                      }}
+                      onMouseOver={(e)=>{ const t=e.target; if (t.classList && t.classList.contains('coord-highlight')) t.classList.add('hover'); }}
+                      onMouseOut={(e)=>{ const t=e.target; if (t.classList && t.classList.contains('coord-highlight')) t.classList.remove('hover'); }}
+                      dangerouslySetInnerHTML={{ __html: (() => {
+                        if (!wkt) return '';
+                        if (!highlightRange) return escapeHtml(wkt);
+                        const { start, end } = highlightRange;
+                        return escapeHtml(wkt.slice(0,start)) + '<span class="coord-highlight" title="Click to copy coordinate">' + escapeHtml(wkt.slice(start,end)) + '</span>' + escapeHtml(wkt.slice(end));
+                      })() }}
+                    />
+                  </div>
                   <div className="d-flex justify-content-end mt-2 gap-2">
-                    <Button size="sm" variant="danger" onClick={handleWktClear} disabled={!wkt}>Clear</Button>
-                    <Button size="sm" variant="outline-primary" onClick={()=>handleCopy('wkt')} disabled={!!error || !wkt}>Copy</Button>
+                      <Button size="sm" variant="danger" onClick={handleWktClear} disabled={!wkt}>Clear</Button>
+                      <Button size="sm" variant="outline-primary" onClick={()=>handleCopy('wkt')} disabled={!!error || !wkt}>Copy</Button>
                   </div>
                 </Tab>
                 <Tab eventKey="geojson" title="GeoJSON" disabled={!json}>

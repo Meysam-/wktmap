@@ -5,20 +5,19 @@ html, body {
   flex-direction: column;
 }
 
-#root {
-  min-height: 100% !important;
-}
-
-#app {
-  min-height: 100% !important;
+/* Ensure the React root and app always fill viewport height so flex children stretch */
+#root, #app {
+  height: 100% !important;
   display: flex;
   flex-direction: column;
 }
 
 #main-content {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0; /* Allow flex children to shrink */
+  height: 100%;
+  overflow: hidden; /* Prevent children from expanding overall layout */
 }
 
 #map-container {
@@ -37,13 +36,20 @@ html, body {
   border-left: 1px solid rgba(0,0,0,0.08);
   background: linear-gradient(180deg,#f9fafb,#f1f4f7);
   backdrop-filter: blur(6px);
-  overflow-y: auto;
+  height: 100%;
+  overflow: hidden; /* prevent panel scroll */
 }
 
 #app.dark-theme #controls-container {
   background: linear-gradient(180deg,#1f242b,#171b21);
   border-left: 1px solid rgba(255,255,255,0.07);
 }
+
+#controls-container .flex-grow-1 { min-height: 0; overflow: hidden; }
+
+/* editor wrapper + editor scroll */
+.wkt-editor-wrapper { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.wkt-editor { flex:1 1 auto; min-height:0; overflow-y:auto; }
 
 #map {
   width: 100%;
@@ -84,8 +90,10 @@ textarea::selection {
 }
 
 /* Make WKT tab fill remaining height */
-.modern-tabs .tab-pane { display: flex; flex-direction: column; height: 100%; }
+.modern-tabs .tab-pane { display: flex; flex-direction: column; height: 100%; min-height:0; }
 .modern-tabs .tab-pane .code-input { flex: 1 1 auto; height: 100%; resize: none; }
+
+/* (overrides cleaned above retained for clarity) */
 
 .wkt-editor { outline: none; white-space: pre-wrap; overflow-y: auto; min-height: 300px; padding: 10px 14px; border: 1px solid #d0d7de; background:#ffffff; border-radius:8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 14px -6px rgba(0,0,0,0.09); }
 .wkt-editor span.coord-highlight {
@@ -113,8 +121,8 @@ textarea::selection {
   background: #f3d25c;
 }
 
-/* Left panel flex adjustments */
-/* #controls-container .flex-grow-1 { min-height: 0; } */
+/* Left panel flex adjustments: ensure inner flex container can shrink so long WKT content scrolls internally */
+#controls-container .flex-grow-1 { min-height: 0; }
 
 #app.dark-theme .code-input, #app.dark-theme .code-output {
   background: #20262d;
