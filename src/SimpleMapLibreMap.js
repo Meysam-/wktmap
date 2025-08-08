@@ -686,7 +686,6 @@ const SimpleMapLibreMap = forwardRef(({
 
     try {
       // Create a simple map style using OpenStreetMap tiles with globe support
-  const darkFogColor = '#0b0f13';
     const mapStyle = {
         version: 8,
         name: 'OpenStreetMap Globe',
@@ -873,7 +872,16 @@ const SimpleMapLibreMap = forwardRef(({
         setLayersInitialized(false);
       }
     };
-  }, []); // do not recreate map on darkMode toggle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - map should only be initialized once
+
+  // Update map center and zoom when props change (after map is loaded)
+  useEffect(() => {
+    if (map.current && isMapLoaded) {
+      map.current.setCenter(center);
+      map.current.setZoom(zoom);
+    }
+  }, [center, zoom, isMapLoaded]);
 
   // Update fog color on theme change without reloading map
   useEffect(() => {
