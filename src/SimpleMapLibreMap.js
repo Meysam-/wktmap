@@ -722,6 +722,7 @@ const SimpleMapLibreMap = forwardRef(({
         style: mapStyle,
         center: center,
         zoom: zoom,
+        maxZoom: 40, // Allow zooming up to level 40 for very detailed views
         projection: 'globe', // Set globe projection during initialization
         attributionControl: true,
         hash: false,
